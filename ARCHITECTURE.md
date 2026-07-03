@@ -28,6 +28,7 @@ seen/
 │   │   └── Push/           # Hotkey → destination-CLI pipeline
 │   ├── SeenApp/            # Menu bar app (MenuBarExtra, Settings, hotkey reg)
 │   └── seen-cli/           # `seen` — thin client for the socket API
+│                           #   (`seen mcp` subcommand = stdio MCP shim)
 ├── Tests/SeenKitTests/
 ├── scripts/bundle.sh       # build → .app bundle → /Applications (Heard-style)
 └── README.md
@@ -91,23 +92,52 @@ struct CaptureRequest {
   caps are clamped-or-rejected with an explicit error, never silently obeyed.
 - Sessions survive nothing: app quit = sessions die (intentional).
 
-## 3. Programmatic access — recommendation
+## 3. Programmatic access — one engine, three doors
 
-**HTTP over a Unix domain socket** (`~/Library/Application Support/Seen/seen.sock`),
-plus a bundled `seen` CLI as the ergonomic front door.
+The menubar app owns the capture capability (TCC grant, hotkey, sessions) and
+serves **HTTP over a Unix domain socket**
+(`~/Library/Application Support/Seen/seen.sock`) as the substrate. Two thin
+clients ride on it; agents pick whichever door fits:
 
-Why UDS over a localhost TCP port:
+1. **`seen mcp` (primary for agents)** — a stdio MCP server that proxies to
+   the socket. Registered once per agent
+   (`claude mcp add seen -- seen mcp`; equivalents for codex/cline/agy).
+   - Tools are typed and self-describing — agents discover
+     `capture_screen(target, output)` with schema at connect time.
+   - Tool results return the screenshot **inline as MCP image content
+     blocks** (plus the saved file path), so the capture lands in the agent's
+     vision context in one round trip — no path-then-read-file second step.
+   - Tool set: `capture_screen`, `list_targets`,
+     `start_watch` / `stop_watch` / `watch_status` (session caps enforced
+     server-side, same as every door).
+   - Why a shim and not MCP as the transport: stdio MCP servers are spawned
+     per client session; a short-lived child process can't own the Screen
+     Recording grant, menu bar, or running sessions. The long-lived app must
+     hold the capability; MCP proxies to it.
+2. **`seen` CLI** — ergonomic front door for humans and shell scripts.
+3. **Raw HTTP over the socket** — `curl --unix-socket ~/.../seen.sock
+   http://seen/capture` for anything that speaks neither MCP nor wants the CLI.
+
+Why UDS (not a localhost TCP port) as the substrate:
 - **Security is filesystem-native.** Socket file is `0600` — only the logged-in
   user's processes can connect. No auth tokens to mint/store/leak, nothing
   listening on the network, invisible to other users and to the LAN.
-- **Still universally scriptable:** `curl --unix-socket ~/.../seen.sock
-  http://seen/capture` works for any agent; the `seen` CLI wraps it for humans
-  and simpler agent tool definitions.
 - Optional escape hatch in Settings: enable loopback TCP (127.0.0.1, random
   port, bearer token auto-generated) for tools that can't speak UDS. Off by
-  default.
+  default. MCP-over-streamable-HTTP can be layered here later if ever needed.
 
-The server itself is a minimal SwiftNIO-free implementation on `Network.framework`
+Considered and rejected:
+- **WebSockets** — value is server-push over a held-open connection; CLI
+  agents are request/response loops that don't hold connections between
+  turns. Interval-session results are better served by files-on-disk +
+  `watch_status`, and MCP has progress notifications if push is ever wanted.
+- **XPC** — native and fast, but invisible to CLI agents and curl.
+- **Apple Events / AppleScript** — legacy, poor structured data.
+- **Daemonless direct-capture CLI** — TCC attribution for CLI tools goes to
+  the invoking terminal/host app, so permissions become per-context and
+  messy; the daemon must exist anyway for hotkey/menubar/sessions.
+
+The server itself is a minimal implementation on `Network.framework`
 (`NWListener` supports UDS) — no heavyweight web-framework dependency.
 
 ### API surface (v1)
@@ -194,8 +224,8 @@ review, and own the final merge:
 | Workstream | Scope | Delegate |
 |---|---|---|
 | A — Core engine | Domain, Capture, OCR, Imaging, Storage + tests | codex |
-| B — API surface | Server (UDS/NWListener), Sessions, `seen` CLI + tests | cline |
-| C — App shell | SeenApp UI, Settings, hotkey, Push pipeline, bundle.sh | claude |
+| B — API surface | Server (UDS/NWListener), Sessions, `seen` CLI + `seen mcp` shim + tests | cline |
+| C — App shell | SeenApp UI, Settings, hotkey, Push pipeline, bundle.sh | agy (antigravity) |
 
 Order: scaffold (Package.swift + Domain protocols) lands first from me so all
 three delegates build against the same interfaces; A/B/C then run in parallel;
