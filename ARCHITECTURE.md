@@ -223,7 +223,7 @@ review, and own the final merge:
 
 | Workstream | Scope | Delegate |
 |---|---|---|
-| A — Core engine | Domain, Capture, OCR, Imaging, Storage + tests | codex |
+| A — Core engine | Domain, Capture, OCR, Imaging, Storage + tests | cline (2nd instance; codex credits exhausted) |
 | B — API surface | Server (UDS/NWListener), Sessions, `seen` CLI + `seen mcp` shim + tests | cline |
 | C — App shell | SeenApp UI, Settings, hotkey, Push pipeline, bundle.sh | agy (antigravity) |
 
