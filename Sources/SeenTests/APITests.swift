@@ -1,7 +1,7 @@
 import Foundation
 @testable import SeenKit
 
-final actor MockCapturer: ScreenCapturing {
+final actor APIMockCapturer: ScreenCapturing {
     var hasPermission = true
     
     func displays() async throws -> [DisplayInfo] {
@@ -91,7 +91,7 @@ let apiTests: [TestCase] = [
     TestCase("APIRouter - happy path", {
         let coordinator = MockCoordinator()
         let sessions = MockSessionManager()
-        let capturer = MockCapturer()
+        let capturer = APIMockCapturer()
         let router = APIRouter(coordinator: coordinator, sessions: sessions, capturer: capturer, configurationProvider: { CaptureConfiguration() })
         
         let req = HTTPRequest(method: "GET", path: "/health")
@@ -103,7 +103,7 @@ let apiTests: [TestCase] = [
         let coordinator = MockCoordinator()
         await coordinator.setNextError(SeenError.permissionRequired("screen recording"))
         let sessions = MockSessionManager()
-        let capturer = MockCapturer()
+        let capturer = APIMockCapturer()
         let router = APIRouter(coordinator: coordinator, sessions: sessions, capturer: capturer, configurationProvider: { CaptureConfiguration() })
         
         let captureReq = HTTPRequest(method: "POST", path: "/capture", body: "{}".data(using: .utf8)!)
@@ -150,7 +150,7 @@ let apiTests: [TestCase] = [
     TestCase("UDSHTTPServer - end to end", {
         let coordinator = MockCoordinator()
         let sessions = MockSessionManager()
-        let capturer = MockCapturer()
+        let capturer = APIMockCapturer()
         let router = APIRouter(coordinator: coordinator, sessions: sessions, capturer: capturer, configurationProvider: { CaptureConfiguration() })
         let server = UDSHTTPServer(router: router)
         
