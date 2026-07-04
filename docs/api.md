@@ -33,7 +33,7 @@ Always 200 when the daemon is up, even without permission — agents use the
 
 ### `GET /config`
 ```json
-{"saveDirectory": "/Users/x/Pictures/Seen", "defaultFormat": "jpeg", "defaultQuality": 0.75, "defaultMaxDimension": 1568}
+{"saveDirectoryPath": "/Users/x/Pictures/Seen", "defaultFormat": "jpeg", "defaultQuality": 0.75, "defaultMaxDimension": 1568}
 ```
 
 ### `GET /displays`

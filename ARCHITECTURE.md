@@ -1,6 +1,7 @@
 # Seen — Architecture
 
-> Status: **PROPOSED** — awaiting approval before implementation.
+> Status: **IMPLEMENTED** (v0.1.0, 2026-07-03). This document is the design
+> of record; deviations discovered during implementation are noted inline.
 
 Seen is a macOS menu bar app that acts as a "vision bridge" for CLI-based LLM
 agents: agents pull screenshots/OCR on demand through a local API, and the user
@@ -24,12 +25,16 @@ seen/
 │   │   ├── Imaging/        # Resize + encode pipeline
 │   │   ├── Storage/        # Timestamped file persistence
 │   │   ├── Sessions/       # Interval-capture session manager (hard caps)
-│   │   ├── Server/         # HTTP-over-Unix-socket API router
-│   │   └── Push/           # Hotkey → destination-CLI pipeline
+│   │   ├── Server/         # HTTP-over-Unix-socket API router + MCP handler
+│   │   ├── Push/           # Hotkey → destination-CLI pipeline
+│   │   └── AppCore/        # Pure app logic (settings, icon state) — lives in
+│   │                       #   SeenKit because executable targets can't be
+│   │                       #   imported by the test runner
 │   ├── SeenApp/            # Menu bar app (MenuBarExtra, Settings, hotkey reg)
 │   └── seen-cli/           # `seen` — thin client for the socket API
 │                           #   (`seen mcp` subcommand = stdio MCP shim)
-├── Tests/SeenKitTests/
+├── Sources/SeenTests/      # executable test runner (`swift run SeenTests`;
+│                           #   XCTest unavailable with CLT-only toolchain)
 ├── scripts/bundle.sh       # build → .app bundle → /Applications (Heard-style)
 └── README.md
 ```
@@ -223,9 +228,9 @@ review, and own the final merge:
 
 | Workstream | Scope | Delegate |
 |---|---|---|
-| A — Core engine | Domain, Capture, OCR, Imaging, Storage + tests | cline (2nd instance; codex credits exhausted) |
-| B — API surface | Server (UDS/NWListener), Sessions, `seen` CLI + `seen mcp` shim + tests | cline |
-| C — App shell | SeenApp UI, Settings, hotkey, Push pipeline, bundle.sh | agy (antigravity) |
+| A — Core engine | Domain, Capture, OCR, Imaging, Storage + tests | cline ✅ (codex was out of credits) |
+| B — API surface | Server (UDS/NWListener), Sessions, `seen` CLI + `seen mcp` shim + tests | agy ✅ (reassigned after a second cline instance stalled producing no files) |
+| C — App shell | SeenApp UI, Settings, hotkey, Push pipeline, bundle.sh | agy ✅ |
 
 Order: scaffold (Package.swift + Domain protocols) lands first from me so all
 three delegates build against the same interfaces; A/B/C then run in parallel;
