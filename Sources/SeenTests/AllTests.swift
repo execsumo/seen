@@ -2,3 +2,4 @@
 // Workstreams append their own suites (do not remove existing ones).
 let allTests: [TestCase] =
     domainTests
+    + coreEngineTests
