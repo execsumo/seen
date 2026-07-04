@@ -1,15 +1,26 @@
-import SeenKit
 import SwiftUI
+import SeenKit
 
-// Scaffold shell — replaced wholesale by workstream C (menu bar states,
-// settings, hotkey, composition root). Exists so the target builds from day 1.
 @main
 struct SeenAppMain: App {
+    @StateObject private var composition = Composition()
+    
     var body: some Scene {
-        MenuBarExtra("Seen", systemImage: "eye") {
-            Text("Seen \(Seen.version) — scaffold")
-            Divider()
-            Button("Quit") { NSApplication.shared.terminate(nil) }
+        MenuBarExtra {
+            MenuContent()
+                .environmentObject(composition)
+        } label: {
+            MenuBarIconContainer(lastCapture: composition.appState.lastCaptureTime, activeSessions: composition.appState.activeSessions)
+        }
+        
+        Settings {
+            SettingsView()
+                .environmentObject(composition)
+        }
+        
+        WindowGroup("Permissions", id: "onboarding") {
+            OnboardingView()
+                .environmentObject(composition)
         }
     }
 }
