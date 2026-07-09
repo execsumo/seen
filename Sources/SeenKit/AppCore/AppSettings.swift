@@ -79,14 +79,19 @@ public final class AppSettings {
         if defaults.object(forKey: "hotkeyModifiers") != nil {
             self.hotkeyModifiers = defaults.integer(forKey: "hotkeyModifiers")
         } else {
-            self.hotkeyModifiers = 4352 // control + option + cmd
+            // Carbon modifier flags (what RegisterEventHotKey consumes):
+            // controlKey(0x1000) | optionKey(0x800) | cmdKey(0x100) = ⌃⌥⌘.
+            self.hotkeyModifiers = 0x1000 | 0x800 | 0x100 // 6400
         }
         
         if let data = defaults.data(forKey: "pushDestination"),
            let dest = try? JSONDecoder().decode(PushDestination.self, from: data) {
             self.pushDestination = dest
         } else {
-            self.pushDestination = .commandTemplate("claude -p \"look at {path}\"")
+            // Clipboard by default: it spawns nothing under Seen, so the hotkey
+            // never drags a child process's TCC prompts onto the app. Users can
+            // switch to a command template or tmux in Settings → Destination.
+            self.pushDestination = .clipboard
         }
         
         if let outStr = defaults.string(forKey: "captureOutput") {

@@ -33,7 +33,7 @@ Always 200 when the daemon is up, even without permission — agents use the
 
 ### `GET /config`
 ```json
-{"saveDirectoryPath": "/Users/x/Pictures/Seen", "defaultFormat": "jpeg", "defaultQuality": 0.75, "defaultMaxDimension": 1568}
+{"saveDirectoryPath": "/Users/x/Library/Application Support/Seen/Captures", "defaultFormat": "jpeg", "defaultQuality": 0.75, "defaultMaxDimension": 1568}
 ```
 
 ### `GET /displays`
@@ -61,7 +61,7 @@ Body: a `CaptureRequest` (every field optional):
 ```json
 {
   "items": [{
-    "path": "/Users/x/Pictures/Seen/capture_2026-07-03_13-50-22_display-1.jpg",
+    "path": "/Users/x/Library/Application Support/Seen/Captures/capture_2026-07-03_13-50-22_display-1.jpg",
     "sourceLabel": "display-1",
     "width": 1568, "height": 1013, "byteSize": 214321,
     "text": "OCR text…"        // absent = OCR not requested; "" = ran, none found

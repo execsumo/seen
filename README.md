@@ -86,22 +86,26 @@ explicit error, never silently clamped.
 
 Set a global hotkey in **Settings → Hotkey** (default ⌃⌥⌘S). On press, Seen
 captures per your defaults and delivers to the destination configured in
-**Settings → Destination**:
+**Settings → Destination** — you also choose what the push *includes* (image +
+text, image only, or text only; agents still pick their own output per request):
 
 | Destination | Behavior |
 |---|---|
-| Command template | Runs your shell template — `claude -p "look at {path}"` — starting a *new* agent session. Placeholders: `{path}`, `{paths}`, `{text}` (shell-escaped). Presets for claude/codex/cline/agy. |
+| Clipboard (**default**) | Copies paths + OCR text. Spawns nothing, so the hotkey never drags a child process's permission prompts onto Seen. |
+| Command template | Runs your shell template — `claude -p "look at {path}"` — starting a *new* agent session. Placeholders: `{path}`, `{paths}`, `{text}` (shell-escaped). Presets for claude/codex/cline/agy. The launched command runs as its *own* TCC-responsible process, so its permission prompts are attributed to it, not to Seen. |
 | tmux pane | `tmux send-keys` the rendered text into a chosen pane — inserts into an *ongoing* CLI session. |
-| Clipboard | Copies paths + OCR text. |
 
 ## Storage & menu bar
 
 Every capture — API, MCP, CLI, hotkey, or menu — is saved to the directory set
-in **Settings → General** (default `~/Pictures/Seen`) as
-`capture_2026-07-03_13-50-22_display-1.jpg`. The menu bar icon shows three
-states: idle, recent capture (3 s flash), and interval-session active. The
-menu has Capture Now, per-app capture, quick access to the screenshots folder,
-and stop buttons for running sessions.
+in **Settings → General** (default `~/Library/Application Support/Seen/Captures`)
+as `capture_2026-07-03_13-50-22_display-1.jpg`. The default is deliberately kept
+out of `~/Pictures` so writing captures never triggers a TCC "Pictures folder"
+prompt — point it at `~/Pictures/Seen` in Settings if you prefer. The menu bar
+icon shows three states: idle, recent capture (3 s flash), and interval-session
+active. The menu is a Paper-styled panel: a status header, Capture Now, per-app
+capture, the screenshots folder, running-session stops, and an agent-bridge
+status line with a one-click `claude mcp add` copy.
 
 ## Architecture
 

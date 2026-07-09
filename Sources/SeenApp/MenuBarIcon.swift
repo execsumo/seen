@@ -14,9 +14,9 @@ public struct MenuBarIcon: View {
         case .idle:
             Image(systemName: "eye")
         case .recentCapture:
-            Image(systemName: "bolt.fill")
+            Image(systemName: "eye.fill")
         case .sessionActive:
-            Image(systemName: "record.circle")
+            Image(systemName: "eye.circle.fill")
         }
     }
 }

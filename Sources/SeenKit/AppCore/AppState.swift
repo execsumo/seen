@@ -2,6 +2,14 @@ import Foundation
 import Observation
 import CoreGraphics
 
+/// Liveness of the agent-facing socket server. Drives the "Agent Access"
+/// indicator so a green light never lies about a socket that failed to bind.
+public enum ServerStatus: Equatable, Sendable {
+    case starting
+    case running
+    case failed(String)
+}
+
 @MainActor
 @Observable
 public final class AppState {
@@ -9,7 +17,8 @@ public final class AppState {
     public var sessionInfos: [SessionInfo] = []
     public var activeSessions: Int { sessionInfos.count }
     public var hasPermission: Bool = false
-    
+    public var serverStatus: ServerStatus = .starting
+
     private let coordinator: any CaptureCoordinating
     
     public init(coordinator: any CaptureCoordinating) {

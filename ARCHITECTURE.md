@@ -173,29 +173,45 @@ seen open                             # open screenshots folder
 
 - Global hotkey via Carbon `RegisterEventHotKey` (sandboxless SPM app; no
   third-party dependency), recorder UI in Settings.
-- On press: capture per the configured default → then hand off to the
+- On press: capture per the configured default (including the configured
+  *output* — image+text / image-only / text-only) → then hand off to the
   configured **destination**, one of:
-  1. **Command template** (recommended default) — run a user-defined shell
-     template with `{path}` / `{text}` placeholders, e.g.
-     `claude -p "look at {path}"`. Presets shipped for claude / codex / cline.
-  2. **tmux pane** — `tmux send-keys` the path into a chosen pane, which drops
+  1. **Clipboard** (default) — path + text copied; user pastes anywhere.
+     Spawns no subprocess, so the hotkey can never drag a child process's TCC
+     prompts onto Seen (see §6).
+  2. **Command template** — run a user-defined shell template with `{path}` /
+     `{text}` placeholders, e.g. `claude -p "look at {path}"`. Presets shipped
+     for claude / codex / cline / agy.
+  3. **tmux pane** — `tmux send-keys` the path into a chosen pane, which drops
      the capture into an *ongoing* CLI session (this is the "insert into
      existing session" mechanism; herdr panes are tmux panes).
-  3. **Clipboard** — path + text copied; user pastes anywhere.
-- If the destination session isn't running, the command template path starts a
-  new one (behavior 1 = new session, behavior 2 = existing session).
+- Command templates are spawned via `posix_spawn` with TCC responsibility
+  **disclaimed** (`responsibility_spawnattrs_setdisclaim`, dlsym'd with graceful
+  fallback) so the launched agent is its own responsible process — its
+  permission prompts attribute to it, not to Seen. Behavior 2 = new session,
+  behavior 3 = existing session.
 
 ## 5. Menu bar UI & state
 
-- `MenuBarExtra` with template icon in three states: **idle** (eye), **recent
-  capture** (eye + flash, ~3 s), **interval session active** (eye + recording
-  dot, persists while any session runs).
-- Menu: Capture Now, Capture App ▸, Open Screenshots Folder, active-session
-  list with Stop buttons, API status line (socket path, copyable curl example),
-  Settings, Quit.
-- Settings panes: General (save directory, image format/quality/max dimension),
-  Hotkey, Destination (LLM CLI integration), API (UDS info, optional TCP
-  toggle), Permissions (live status + "Open System Settings" deep links).
+Rebuilt 2026-07-08 as a human-facing surface (agents use the API/MCP/CLI, never
+this) using Heard's "Paper" design language — see `SeenApp/DesignSystem.swift`.
+
+- `MenuBarExtra` with **`.menuBarExtraStyle(.window)`** (a real Paper panel, not
+  a native menu). Template icon in three states: **idle** (`eye`), **recent
+  capture** (`eye.fill` flash, ~3 s), **interval session active**
+  (`eye.circle.fill`, persists while any session runs).
+- Panel: status header card (Ready / capture flash / "Capturing on a schedule"),
+  Capture Now (with the hotkey shown as ⌃⌥⌘S key glyphs, not raw codes),
+  Capture App ▸, Open Screenshots Folder, active-session Stops, an **Agent
+  bridge** status line (driven by the real `server.start()` result) with a
+  one-click `claude mcp add` copy, Settings, Quit.
+- Settings is a **sidebar-nav window** (a `Window(id:"settings")`, opened via
+  `openWindow` + `NSApp.activate` — the `Settings` scene / `SettingsLink` opens
+  *behind* other apps from an `LSUIElement` accessory app). Panes: General (save
+  dir, format/quality/max-dim), Hotkey (key-chip display + recorder), Destination
+  (output-include + delivery target), **Agent Access** (live bridge-status hero +
+  copy-paste connect commands; socket/curl demoted to a Details card — replaces
+  the old thin "API status"), Permissions (live status + deep links).
 
 ## 6. Permissions handling
 
@@ -207,6 +223,13 @@ seen open                             # open screenshots folder
 - **Accessibility** — *not required* for any core feature (tmux/command
   destinations avoid keystroke injection). Only requested if the user opts
   into a future "type into frontmost app" destination.
+- **Nothing else.** Seen must only ever prompt for Screen Recording. Two design
+  choices protect that invariant: (a) the default save dir lives under
+  Application Support, not `~/Pictures`, so writing captures doesn't hit the TCC
+  "Pictures folder" prompt; (b) command-template pushes disclaim TCC
+  responsibility (§4) so a spawned agent's prompts (network, Documents, Apple
+  Events) attribute to the agent, not to Seen. The clipboard default sidesteps
+  the issue entirely by spawning nothing.
 - Stable code-signing via `bundle.sh --sign` (Heard pattern) so TCC grants
   survive rebuilds.
 

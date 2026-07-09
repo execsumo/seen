@@ -52,11 +52,14 @@ public final class Composition: ObservableObject {
             configurationProvider: configurationProvider
         ))
         self.server = server
+        let appState = self.appState
         Task {
             do {
                 try await server.start()
+                await MainActor.run { appState.serverStatus = .running }
             } catch {
                 NSLog("Seen: failed to start API server: \(error)")
+                await MainActor.run { appState.serverStatus = .failed(error.localizedDescription) }
             }
         }
     }

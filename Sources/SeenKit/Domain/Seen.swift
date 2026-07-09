@@ -24,9 +24,11 @@ public enum SeenPaths {
     }
 
     /// Default directory captures are saved to when the user hasn't chosen one.
+    /// Kept under Application Support (not `~/Pictures`) so writing captures
+    /// never triggers the TCC "Pictures folder" prompt — Seen should only ever
+    /// need Screen Recording. Users can still point this at ~/Pictures in
+    /// Settings if they want.
     public static var defaultSaveDirectory: URL {
-        FileManager.default
-            .urls(for: .picturesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Seen", isDirectory: true)
+        applicationSupportDirectory.appendingPathComponent("Captures", isDirectory: true)
     }
 }

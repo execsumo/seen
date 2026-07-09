@@ -2,7 +2,60 @@
 
 _Last updated: 2026-07-03. Read this before making changes._
 
-## Status: v0.1.0 — feature-complete, integrated, awaiting first real-world run
+## Status: v0.1.0 — feature-complete, integrated, UX redesign done, verified live
+
+### 2026-07-03 UX/UI pass (Paper theme)
+The menu bar and Settings were rebuilt for humans (agents use the API/MCP/CLI,
+never these surfaces), borrowing Heard's "Paper" design language. Verified
+running with Screen Recording granted, in light **and** dark.
+
+- **`SeenApp/DesignSystem.swift`** (new) — Paper palette via `Color(light:dark:)`,
+  cards, pills, `StatusDot`, key chips, Paper button styles, `SeenMark` (eye
+  glyph), and `Hotkey` formatting (Carbon-flag ↔ human glyphs).
+- **Menu bar → `.menuBarExtraStyle(.window)`** custom panel (`MenuContent.swift`):
+  status header (Ready / capture flash / active-session), themed capture rows
+  with the hotkey shown as ⌃⌥⌘S, an **Agent bridge** status line + one-click
+  "copy `claude mcp add`". Live-updates confirmed against real capture events.
+- **Hotkey representation bug fixed**: the recorder stored NSEvent modifier
+  flags into a field `RegisterEventHotKey` reads as **Carbon** flags, so
+  recorded shortcuts silently misfired. Recorder now converts to Carbon on
+  capture; display is key-chip glyphs; default corrected to ⌃⌥⌘S (Carbon 6400).
+- **Settings → sidebar shell** (`SettingsView.swift`): General / Hotkey /
+  Destination / **Agent Access** / Permissions. The old weak "API Status" tab
+  is now **Agent Access** — live bridge-status hero + copy-paste connect
+  commands, socket/curl demoted to a Details card.
+- **`AppState.serverStatus`** now reflects the real `server.start()` result
+  (running/starting/failed), surfaced in the panel and Agent Access hero.
+  Closes the fire-and-forget rough edge below.
+- Onboarding reskinned to Paper (`OnboardingView.swift`).
+
+### 2026-07-08 permission hardening (Seen only ever asks for Screen Recording)
+The hotkey used to make Seen prompt for network / Documents / Automation /
+Photos. Root cause: the default push spawned `claude` as a child of Seen, and
+TCC attributes a child's prompts to the parent; plus the default save dir was
+`~/Pictures`. Three fixes:
+- **Default save dir → `~/Library/Application Support/Seen/Captures`**
+  (`SeenPaths.defaultSaveDirectory`) — off `~/Pictures`, no TCC "Pictures" prompt.
+- **Command-template pushes disclaim TCC responsibility** — `DefaultProcessRunner`
+  now `posix_spawn`s with `responsibility_spawnattrs_setdisclaim` (dlsym'd,
+  graceful fallback) so a spawned agent owns its own prompts. Verified the SPI
+  resolves on macOS 15.
+- **Default destination → Clipboard** (`AppSettings`) — spawns nothing.
+- Migration for existing installs: the persisted `pushDestination` /
+  `saveDirectoryPath` keys may hold the old values; clearing them (or picking
+  Clipboard / a new folder in Settings) adopts the new defaults.
+
+Verified live: settings-opens-in-front fix, Destination pane + new Include
+control, record→fire hotkey (⌃⌥⌘S records → displays → fires a real capture),
+captures landing in the new dir, `/config` reporting the new path. **Not**
+pixel-verified: the session-active panel header ("Capturing on a schedule") —
+the `.window` panel dismisses on focus loss so it couldn't be screenshotted;
+it's driven by the same `AppState` observer path that the capture-flash state
+(which *was* verified live) uses, so it's logically sound but unconfirmed visually.
+
+---
+
+## Original status: feature-complete, integrated, awaiting first real-world run
 
 All three workstreams are merged to `main`, the full suite passes
 (`swift run SeenTests` — 38/38), and `./scripts/bundle.sh` installs
@@ -40,12 +93,14 @@ paths.
 
 - **CLI human output** prints Swift struct dumps for `health`/`targets`/`watch
   list` instead of formatted text (see `SeenCommand.swift`) — functional, ugly.
-- **Loopback TCP escape hatch** (Settings → API) is specced in
+- **Loopback TCP escape hatch** (Settings → Agent Access) is specced in
   ARCHITECTURE.md §3 but not implemented — UDS only for now.
-- **App icon** is SF Symbols only; no .icns asset.
+- **App icon** is SF Symbols only; no .icns asset (menu bar uses `eye`
+  variants; `SeenMark` is a drawn eye glyph used in Settings/onboarding).
 - **Launch at login** not implemented (SMAppService would be the way).
-- Composition starts the socket server with `Task {}` fire-and-forget; server
-  start failure only logs via NSLog. Consider surfacing in the menu.
+- ~~Composition starts the socket server fire-and-forget; failure only NSLogs.~~
+  Fixed 2026-07-03: `server.start()` result drives `AppState.serverStatus`,
+  shown in the panel + Agent Access hero (NSLog kept for the failure detail).
 
 ## Architecture in 30 seconds
 

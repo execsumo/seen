@@ -7,7 +7,9 @@ description: See the user's screen via the Seen daemon — take screenshots and 
 
 Seen is a menu bar daemon (`/Applications/Seen.app`) exposing screen capture +
 Vision OCR over a local Unix socket. Every capture is also saved to disk
-(default `~/Pictures/Seen/capture_<date>_<time>_<source>.jpg`, ≤1568 px, ~300 KB).
+(default `~/Library/Application Support/Seen/Captures/capture_<date>_<time>_<source>.jpg`,
+≤1568 px, ~300 KB; user-configurable in Settings). Query `seen open` or
+`/config`'s `saveDirectoryPath` for the live location.
 
 ## Quick recipes (CLI — always available as `seen`)
 
