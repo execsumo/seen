@@ -10,7 +10,6 @@ public struct MenuContent: View {
     @Environment(\.openWindow) private var openWindow
     @State private var apps: [AppWindowInfo] = []
     @State private var now = Date()
-    @State private var copiedSetup = false
 
     private let ticker = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -71,13 +70,6 @@ public struct MenuContent: View {
 
             SeenTheme.Paper.borderSoft.frame(height: 0.5)
 
-            // Agent access — bridge status + one-line connect
-            agentAccess
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-
-            SeenTheme.Paper.borderSoft.frame(height: 0.5)
-
             // Footer
             VStack(spacing: 1) {
                 MenuBarRow(title: "Settings…", icon: "gearshape") {
@@ -113,25 +105,40 @@ public struct MenuContent: View {
                              subtitle: "Saved to your screenshots folder")
         case .idle:
             StatusHeaderCard(dotColor: idleDotColor, pulsing: false,
-                             title: "Ready",
+                             title: idleTitle,
                              subtitle: idleSubtitle)
         }
     }
 
+    // Title, subtitle, and dot all branch the same way — permission first, then
+    // server status — so they never contradict each other.
+
+    private var idleTitle: String {
+        guard composition.appState.hasPermission else { return "Screen Recording Needed" }
+        switch composition.appState.serverStatus {
+        case .running:  return "Agent Bridge Running"
+        case .starting: return "Starting Agent Bridge…"
+        case .failed:   return "Agent Bridge Offline"
+        }
+    }
+
     private var idleDotColor: Color {
+        // No Screen Recording → nothing captures at all: red, not amber. Amber is
+        // reserved for states where capture still works (bridge starting/offline).
+        guard composition.appState.hasPermission else { return SeenTheme.Paper.bad }
         switch composition.appState.serverStatus {
         case .running:  return SeenTheme.Paper.good
         case .starting: return SeenTheme.Paper.warn
-        case .failed:   return SeenTheme.Paper.good // capture still works via menu/hotkey
+        case .failed:   return SeenTheme.Paper.warn // capture still works, but the bridge is down — amber, not green
         }
     }
 
     private var idleSubtitle: String {
-        guard composition.appState.hasPermission else { return "Screen Recording not granted" }
+        guard composition.appState.hasPermission else { return "Grant it so agents can see your screen" }
         switch composition.appState.serverStatus {
         case .running:  return "Agents can see your screen"
         case .starting: return "Starting agent bridge…"
-        case .failed:   return "Agent bridge offline — capture still works"
+        case .failed:   return "Capture still works via hotkey & menu"
         }
     }
 
@@ -166,54 +173,6 @@ public struct MenuContent: View {
         .menuIndicator(.hidden)
     }
 
-    // MARK: Agent access
-
-    private var agentAccess: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 8) {
-                StatusDot(color: bridgeDotColor, pulsing: false)
-                Text("Agent bridge")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(SeenTheme.Paper.ink)
-                Spacer()
-                Text(bridgeStatusText)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(SeenTheme.Paper.mute)
-            }
-
-            Button {
-                copySetup()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: copiedSetup ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 10))
-                    Text(copiedSetup ? "Copied setup command" : "Copy “claude mcp add” command")
-                        .font(.system(size: 11, weight: .medium))
-                    Spacer()
-                }
-                .foregroundStyle(SeenTheme.Paper.accent)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var bridgeDotColor: Color {
-        switch composition.appState.serverStatus {
-        case .running:  return SeenTheme.Paper.good
-        case .starting: return SeenTheme.Paper.warn
-        case .failed:   return SeenTheme.Paper.bad
-        }
-    }
-
-    private var bridgeStatusText: String {
-        switch composition.appState.serverStatus {
-        case .running:  return "Running"
-        case .starting: return "Starting…"
-        case .failed:   return "Offline"
-        }
-    }
-
     // MARK: Actions
 
     private func capture(target: CaptureRequest.Target?) {
@@ -222,17 +181,9 @@ public struct MenuContent: View {
             if let target { request.target = target }
             request.output = composition.settings.captureOutput
             if let result = try? await composition.coordinator.perform(request) {
-                try? await composition.pipeline.push(result, to: composition.settings.pushDestination)
+                try? await composition.pipeline.push(result, to: .clipboard)
             }
         }
-    }
-
-    private func copySetup() {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString("claude mcp add seen -- seen mcp", forType: .string)
-        copiedSetup = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { copiedSetup = false }
     }
 
     private func loadApps() {

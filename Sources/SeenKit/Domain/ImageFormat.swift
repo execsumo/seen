@@ -4,7 +4,6 @@
 public enum ImageFormat: String, Sendable, Codable, CaseIterable, Equatable {
     case jpeg
     case png
-    case heic
     case webp
 
     public var fileExtension: String {
@@ -15,7 +14,6 @@ public enum ImageFormat: String, Sendable, Codable, CaseIterable, Equatable {
         switch self {
         case .jpeg: "image/jpeg"
         case .png: "image/png"
-        case .heic: "image/heic"
         case .webp: "image/webp"
         }
     }

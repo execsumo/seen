@@ -7,9 +7,9 @@ import UniformTypeIdentifiers
 ///
 /// Downscales the longest edge to `options.maxDimension` (aspect ratio preserved,
 /// never upscaling) via CoreGraphics, then encodes the result with
-/// `CGImageDestination`. JPEG, PNG, and HEIC are always supported; WebP is
-/// encoded only when the OS reports it as a writable destination type, otherwise
-/// `SeenError.unsupportedFormat` is thrown.
+/// `CGImageDestination`. JPEG and PNG are always supported; WebP is encoded only
+/// when the OS reports it as a writable destination type (macOS ImageIO does not
+/// ship a WebP encoder today), otherwise `SeenError.unsupportedFormat` is thrown.
 public final class ImageIOEncoder: ImageEncoding {
 
     /// Creates an encoder that downscales via CoreGraphics and writes via ImageIO.
@@ -37,7 +37,7 @@ public final class ImageIOEncoder: ImageEncoding {
         }
 
         // Lossy formats honour the quality setting; PNG is lossless and ignores it.
-        if format == .jpeg || format == .heic || format == .webp {
+        if format == .jpeg || format == .webp {
             CGImageDestinationAddImage(
                 destination,
                 scaled,
@@ -111,7 +111,6 @@ public final class ImageIOEncoder: ImageEncoding {
         switch format {
         case .jpeg: return UTType.jpeg.identifier
         case .png: return UTType.png.identifier
-        case .heic: return UTType.heic.identifier
         case .webp: return UTType.webP.identifier
         }
     }

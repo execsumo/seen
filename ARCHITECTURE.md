@@ -83,10 +83,12 @@ struct CaptureRequest {
 ### Imaging pipeline (token-cost control)
 - Downscale longest edge to **1568 px** by default (Anthropic's vision
   sweet spot — larger images are resized server-side anyway, so bigger only
-  costs tokens). Configurable per-request and in Settings.
-- Encode via ImageIO: **JPEG quality 0.75 default**; HEIC and WebP offered
-  where the OS supports encoding them. Typical Retina full-screen lands around
-  150–400 KB.
+  costs tokens). Overridable per-request via the API.
+- Encode via ImageIO: **PNG default** (lossless — on-screen text stays sharp
+  for the vision model at no extra token cost, since Claude bills images by
+  dimensions, not bytes). JPEG (quality 0.75) offered per-request for a smaller
+  payload; WebP is in the format enum but macOS ImageIO has no WebP encoder yet
+  (see handoff.md). HEIC removed — Claude vision doesn't accept it.
 
 ### Interval sessions (with non-bypassable caps)
 - `POST /sessions {interval, duration, target, output}` → session id;

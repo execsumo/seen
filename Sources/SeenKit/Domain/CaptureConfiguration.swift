@@ -14,7 +14,7 @@ public struct CaptureConfiguration: Sendable, Codable, Equatable {
 
     public init(
         saveDirectoryPath: String = SeenPaths.defaultSaveDirectory.path,
-        defaultFormat: ImageFormat = .jpeg,
+        defaultFormat: ImageFormat = .png,
         defaultQuality: Double = 0.75,
         defaultMaxDimension: Int = 1568
     ) {

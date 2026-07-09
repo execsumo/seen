@@ -98,6 +98,18 @@ paths.
 - **App icon** is SF Symbols only; no .icns asset (menu bar uses `eye`
   variants; `SeenMark` is a drawn eye glyph used in Settings/onboarding).
 - **Launch at login** not implemented (SMAppService would be the way).
+- **WebP encoding** is the ideal default for the agent path (lossless-quality
+  text, smaller than PNG, accepted by Claude vision) but macOS ImageIO ships no
+  WebP *encoder* — `CGImageDestinationCopyTypeIdentifiers()` omits
+  `org.webmproject.webp` (verified 2026-07-08). Default is PNG instead; the
+  `webp` case is kept in `ImageFormat` and the encoder throws a clean
+  `unsupportedFormat`. Future enhancement: add a `libwebp` /
+  `SDWebImageWebPCoder` encoder path, then switch the default to WebP.
+- **HEIC** was removed from `ImageFormat` (2026-07-08): best compression, but
+  Claude's vision API does not accept `image/heic` (only jpeg/png/gif/webp), so
+  a HEIC capture handed to an agent 400s. Re-add the case when the Claude API
+  starts accepting HEIC. (AVIF is encodable on macOS but blocked for the same
+  reason — no Claude support.)
 - ~~Composition starts the socket server fire-and-forget; failure only NSLogs.~~
   Fixed 2026-07-03: `server.start()` result drives `AppState.serverStatus`,
   shown in the panel + Agent Access hero (NSLog kept for the failure detail).

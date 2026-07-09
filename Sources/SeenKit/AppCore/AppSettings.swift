@@ -7,29 +7,23 @@ public final class AppSettings {
     public var saveDirectoryPath: String {
         didSet { defaults.set(saveDirectoryPath, forKey: "saveDirectoryPath") }
     }
-    public var defaultFormat: ImageFormat {
-        didSet { defaults.set(defaultFormat.rawValue, forKey: "defaultFormat") }
-    }
-    public var defaultQuality: Double {
-        didSet { defaults.set(defaultQuality, forKey: "defaultQuality") }
-    }
-    public var defaultMaxDimension: Int {
-        didSet { defaults.set(defaultMaxDimension, forKey: "defaultMaxDimension") }
-    }
+    // Image encoding is built into the app, not user-configurable: PNG at 1568 px
+    // is the right default for every capture — lossless, so on-screen text stays
+    // artifact-free for the vision model, at no extra token cost (Claude bills
+    // images by dimensions, not bytes). OCR also runs on the full-resolution frame
+    // first, so the downscale never costs text fidelity. Agents that want a smaller
+    // payload override format/quality/size per request via the API. Kept as the
+    // per-request fallback in `configurationProvider`; never persisted, so no stale
+    // value can resurrect.
+    public let defaultFormat: ImageFormat
+    public let defaultQuality: Double
+    public let defaultMaxDimension: Int
     
     public var hotkeyCode: Int {
         didSet { defaults.set(hotkeyCode, forKey: "hotkeyCode") }
     }
     public var hotkeyModifiers: Int {
         didSet { defaults.set(hotkeyModifiers, forKey: "hotkeyModifiers") }
-    }
-    
-    public var pushDestination: PushDestination {
-        didSet {
-            if let data = try? JSONEncoder().encode(pushDestination) {
-                defaults.set(data, forKey: "pushDestination")
-            }
-        }
     }
     
     public var captureOutput: CaptureRequest.Output {
@@ -51,25 +45,13 @@ public final class AppSettings {
         
         let initialConfig = CaptureConfiguration()
         self.saveDirectoryPath = defaults.string(forKey: "saveDirectoryPath") ?? initialConfig.saveDirectoryPath
-        
-        if let formatRaw = defaults.string(forKey: "defaultFormat"), let format = ImageFormat(rawValue: formatRaw) {
-            self.defaultFormat = format
-        } else {
-            self.defaultFormat = initialConfig.defaultFormat
-        }
-        
-        if defaults.object(forKey: "defaultQuality") != nil {
-            self.defaultQuality = defaults.double(forKey: "defaultQuality")
-        } else {
-            self.defaultQuality = initialConfig.defaultQuality
-        }
-        
-        if defaults.object(forKey: "defaultMaxDimension") != nil {
-            self.defaultMaxDimension = defaults.integer(forKey: "defaultMaxDimension")
-        } else {
-            self.defaultMaxDimension = initialConfig.defaultMaxDimension
-        }
-        
+
+        // Always the built-in encoding defaults — deliberately not read from
+        // UserDefaults, so a value an older build's UI persisted can't stick.
+        self.defaultFormat = initialConfig.defaultFormat
+        self.defaultQuality = initialConfig.defaultQuality
+        self.defaultMaxDimension = initialConfig.defaultMaxDimension
+
         if defaults.object(forKey: "hotkeyCode") != nil {
             self.hotkeyCode = defaults.integer(forKey: "hotkeyCode")
         } else {
@@ -82,16 +64,6 @@ public final class AppSettings {
             // Carbon modifier flags (what RegisterEventHotKey consumes):
             // controlKey(0x1000) | optionKey(0x800) | cmdKey(0x100) = ⌃⌥⌘.
             self.hotkeyModifiers = 0x1000 | 0x800 | 0x100 // 6400
-        }
-        
-        if let data = defaults.data(forKey: "pushDestination"),
-           let dest = try? JSONDecoder().decode(PushDestination.self, from: data) {
-            self.pushDestination = dest
-        } else {
-            // Clipboard by default: it spawns nothing under Seen, so the hotkey
-            // never drags a child process's TCC prompts onto the app. Users can
-            // switch to a command template or tmux in Settings → Destination.
-            self.pushDestination = .clipboard
         }
         
         if let outStr = defaults.string(forKey: "captureOutput") {

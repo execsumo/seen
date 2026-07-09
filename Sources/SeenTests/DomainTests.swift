@@ -83,7 +83,7 @@ let domainTests: [TestCase] = [
         try expectEqual(options, EncodingOptions(format: .png, quality: 0.5, maxDimension: 800))
 
         let defaults = config.encodingOptions(for: CaptureRequest())
-        try expectEqual(defaults, EncodingOptions(format: .jpeg, quality: 0.75, maxDimension: 1568))
+        try expectEqual(defaults, EncodingOptions(format: .png, quality: 0.75, maxDimension: 1568))
     },
 
     TestCase("result: combinedText labels sources only when multiple") {

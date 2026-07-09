@@ -35,13 +35,14 @@ public struct MCPHandler {
                 let tools: [[String: Any]] = [
                     [
                         "name": "capture_screen",
-                        "description": "Capture the screen",
+                        "description": "Capture the screen. Images default to PNG (lossless, best for on-screen text). Set format to \"jpeg\" for a smaller payload.",
                         "inputSchema": [
                             "type": "object",
                             "properties": [
                                 "target": ["type": "string"],
                                 "output": ["type": "string"],
-                                "max_dimension": ["type": "integer"]
+                                "max_dimension": ["type": "integer"],
+                                "format": ["type": "string", "enum": ["png", "jpeg"]]
                             ]
                         ]
                     ],
@@ -113,6 +114,12 @@ public struct MCPHandler {
             if let maxDim = arguments["max_dimension"] as? Int {
                 req.maxDimension = maxDim
             }
+            // Default is PNG (lossless, best for on-screen text). Agents whose
+            // vision model rejects PNG, or who want smaller payloads, can request
+            // "jpeg". "webp" is accepted but not encodable on macOS ImageIO today.
+            if let fmtStr = arguments["format"] as? String, let fmt = ImageFormat(rawValue: fmtStr) {
+                req.format = fmt
+            }
             let res = try await client.capture(req)
             var content: [[String: Any]] = []
             
@@ -125,7 +132,6 @@ public struct MCPHandler {
                         let ext = URL(fileURLWithPath: item.path).pathExtension.lowercased()
                         var mime = "image/jpeg"
                         if ext == "png" { mime = "image/png" }
-                        else if ext == "heic" { mime = "image/heic" }
                         else if ext == "webp" { mime = "image/webp" }
                         
                         content.append([

@@ -58,31 +58,36 @@ let shellTests: [TestCase] = [
         try expectEqual(iconState(lastCapture: now.addingTimeInterval(-1), activeSessions: 1, now: now), .sessionActive)
     },
     
-    TestCase("AppSettings round-trip") {
+    TestCase("AppSettings: image encoding is built-in, not persisted") {
         let defaults = UserDefaults(suiteName: "TestSuite")!
         defaults.removePersistentDomain(forName: "TestSuite")
-        
+
         Task { @MainActor in
             let settings = AppSettings(defaults: defaults)
-            
-            // test defaults when empty
+
+            // Persisted settings default correctly when empty.
             try expectEqual(settings.hotkeyCode, 1)
             try expectEqual(settings.hotkeyModifiers, 4352)
+
+            // Encoding is the built-in default: PNG at 1568 px.
             try expectEqual(settings.defaultQuality, 0.75)
             try expectEqual(settings.defaultMaxDimension, 1568)
-            try expectEqual(settings.defaultFormat, .jpeg)
-            
-            // test round trip
-            settings.defaultQuality = 0.5
-            settings.defaultMaxDimension = 1000
-            
+            try expectEqual(settings.defaultFormat, .png)
+
+            // A stale value an older build's UI persisted must NOT resurrect —
+            // encoding is baked into the app now, not user-configurable.
+            defaults.set(0.5, forKey: "defaultQuality")
+            defaults.set(1000, forKey: "defaultMaxDimension")
+            defaults.set("jpeg", forKey: "defaultFormat")
+
             let settings2 = AppSettings(defaults: defaults)
-            try expectEqual(settings2.defaultQuality, 0.5)
-            try expectEqual(settings2.defaultMaxDimension, 1000)
-            
-            let config = settings.captureConfiguration
-            try expectEqual(config.defaultQuality, 0.5)
-            try expectEqual(config.defaultMaxDimension, 1000)
+            try expectEqual(settings2.defaultQuality, 0.75)
+            try expectEqual(settings2.defaultMaxDimension, 1568)
+            try expectEqual(settings2.defaultFormat, .png)
+
+            let config = settings2.captureConfiguration
+            try expectEqual(config.defaultQuality, 0.75)
+            try expectEqual(config.defaultMaxDimension, 1568)
         }
     }
 ]

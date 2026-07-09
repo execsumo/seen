@@ -60,7 +60,10 @@ public final class HotkeyManager {
                 var request = CaptureRequest()
                 request.output = settings.captureOutput
                 let result = try await coordinator.perform(request)
-                try await pipeline.push(result, to: settings.pushDestination)
+                // Hotkey delivers to the clipboard only: it spawns nothing under
+                // Seen, so a capture never drags a child process's TCC prompts
+                // onto the app. Agents pick their own output via the API/MCP/CLI.
+                try await pipeline.push(result, to: .clipboard)
             } catch {
                 print("Hotkey capture failed: \(error)")
             }

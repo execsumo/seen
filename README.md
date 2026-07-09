@@ -8,14 +8,16 @@ API, and you push screen context into your agent session with a global hotkey.
   via ScreenCaptureKit one-shots (no persistent streams, near-zero idle cost).
 - **OCR** with Apple's Vision framework (`.accurate`, on-device), run on the
   full-resolution capture *before* downscaling so small text survives.
-- **Token-aware images**: downscaled to 1568 px longest edge and encoded JPEG
-  q0.75 by default (configurable; PNG/HEIC/WebP where the OS supports them).
+- **Token-aware images**: downscaled to 1568 px longest edge and encoded PNG
+  automatically — lossless, so on-screen text stays sharp for the vision model at
+  no extra token cost (Claude bills images by dimensions, not bytes). No knobs to
+  get wrong. Agents can override format (e.g. JPEG for a smaller payload), quality,
+  and size per request.
 - **Three access doors** for agents: an MCP stdio server, a `seen` CLI, and a
   raw HTTP-over-Unix-socket API.
 - **Interval capture** with compiled-in safety caps no agent can override.
-- **Global hotkey** that captures and pipes the result into your LLM CLI —
-  a command template, a tmux pane (drops into an *ongoing* session), or the
-  clipboard.
+- **Global hotkey** that captures your screen and copies the path (and OCR text)
+  to the clipboard, ready to paste into any agent session.
 
 Requires macOS 15+, Apple Silicon recommended. No Xcode needed — Command Line
 Tools are enough.
@@ -85,27 +87,27 @@ explicit error, never silently clamped.
 ## Hotkey push
 
 Set a global hotkey in **Settings → Hotkey** (default ⌃⌥⌘S). On press, Seen
-captures per your defaults and delivers to the destination configured in
-**Settings → Destination** — you also choose what the push *includes* (image +
-text, image only, or text only; agents still pick their own output per request):
+captures your screen and copies the capture's file path — and its OCR text — to
+the clipboard, so you can paste it into any agent session. In **Settings →
+Destination** you choose what the push *includes* (image + text, image only, or
+text only; agents still pick their own output per request).
 
-| Destination | Behavior |
-|---|---|
-| Clipboard (**default**) | Copies paths + OCR text. Spawns nothing, so the hotkey never drags a child process's permission prompts onto Seen. |
-| Command template | Runs your shell template — `claude -p "look at {path}"` — starting a *new* agent session. Placeholders: `{path}`, `{paths}`, `{text}` (shell-escaped). Presets for claude/codex/cline/agy. The launched command runs as its *own* TCC-responsible process, so its permission prompts are attributed to it, not to Seen. |
-| tmux pane | `tmux send-keys` the rendered text into a chosen pane — inserts into an *ongoing* CLI session. |
+Delivery is clipboard-only by design: copying spawns nothing under Seen, so a
+capture never drags a child process's permission prompts onto the app. Agents
+that want a capture delivered elsewhere use the API/MCP/CLI directly.
 
 ## Storage & menu bar
 
 Every capture — API, MCP, CLI, hotkey, or menu — is saved to the directory set
 in **Settings → General** (default `~/Library/Application Support/Seen/Captures`)
-as `capture_2026-07-03_13-50-22_display-1.jpg`. The default is deliberately kept
+as `capture_2026-07-03_13-50-22_display-1.png`. The default is deliberately kept
 out of `~/Pictures` so writing captures never triggers a TCC "Pictures folder"
 prompt — point it at `~/Pictures/Seen` in Settings if you prefer. The menu bar
 icon shows three states: idle, recent capture (3 s flash), and interval-session
-active. The menu is a Paper-styled panel: a status header, Capture Now, per-app
-capture, the screenshots folder, running-session stops, and an agent-bridge
-status line with a one-click `claude mcp add` copy.
+active. The menu is a Paper-styled panel: a status header (which doubles as the
+agent-bridge indicator — "Agent Bridge Running" when the socket is live), Capture
+Now, per-app capture, the screenshots folder, and running-session stops. Agents
+connect via the README's setup commands, not the menu.
 
 ## Architecture
 
