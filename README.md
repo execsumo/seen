@@ -22,7 +22,21 @@ API, and you push screen context into your agent session with a global hotkey.
 Requires macOS 15+, Apple Silicon recommended. No Xcode needed — Command Line
 Tools are enough.
 
-## Build & install
+## Installation
+
+**Via Homebrew (Recommended)**
+
+```bash
+brew tap execsumo/tap
+brew install --cask seen
+```
+
+To update to the latest version:
+```bash
+brew upgrade --cask seen
+```
+
+### Manual Build
 
 ```bash
 swift build                 # compile everything
