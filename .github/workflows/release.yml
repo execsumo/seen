@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 0.1.1)'
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    runs-on: macos-15
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release version
+        id: version
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+            if git ls-remote --tags origin "refs/tags/v${VERSION}" | grep -q .; then
+              echo "ERROR: tag v${VERSION} already exists"
+              exit 1
+            fi
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Import Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PWD="$(openssl rand -hex 16)"
+          echo "KEYCHAIN_PWD=$KEYCHAIN_PWD" >> "$GITHUB_ENV"
+          security create-keychain -p "$KEYCHAIN_PWD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PWD" build.keychain
+          echo "$APPLE_CERTIFICATE" | base64 --decode > cert.p12
+          security import cert.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PWD" build.keychain
+          rm -f cert.p12
+
+      - name: Build and notarize DMG
+        env:
+          APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          mkdir -p ~/.apple
+          echo "$APPLE_API_KEY" | base64 --decode > ~/.apple/AuthKey.p8
+          ./scripts/dmg.sh \
+            --sign "$APPLE_DEVELOPER_ID" \
+            --api-key-path ~/.apple/AuthKey.p8 \
+            --api-key-id "$APPLE_API_KEY_ID" \
+            --api-issuer-id "$APPLE_API_ISSUER_ID" \
+            --version "${{ steps.version.outputs.version }}" \
+            --output dist
+          rm -f ~/.apple/AuthKey.p8
+
+      - name: Collect release metadata
+        id: meta
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG="dist/Seen-${VERSION}.dmg"
+          SHA256=$(shasum -a 256 "$DMG" | awk '{print $1}')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "dmg=${DMG}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload DMG to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}
+          files: ${{ steps.meta.outputs.dmg }}
+          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Homebrew cask
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          SHA256="${{ steps.meta.outputs.sha256 }}"
+          sed -i '' \
+            -e "s/version \"[^\"]*\"/version \"${VERSION}\"/" \
+            -e "s/sha256 \"[^\"]*\"/sha256 \"${SHA256}\"/" \
+            Casks/seen.rb
+
+      - name: Commit and push cask update
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/seen.rb
+          git commit -m "Update Homebrew cask to v${{ steps.meta.outputs.version }} [skip ci]"
+          git remote set-url origin "https://execsumo:${GH_PAT}@github.com/execsumo/seen.git"
+          git push origin HEAD:refs/heads/main
+
+      - name: Push cask to Homebrew tap
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          git clone "https://execsumo:${GH_PAT}@github.com/execsumo/homebrew-tap.git" homebrew-tap
+          mkdir -p homebrew-tap/Casks
+          cp Casks/seen.rb homebrew-tap/Casks/seen.rb
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/seen.rb
+          git commit -m "Update seen to v${VERSION}"
+          git push origin HEAD:refs/heads/main

@@ -10,11 +10,14 @@ BUILD_CONFIG="debug"
 SIGN_IDENTITY=""
 OUTPUT_DIR="$REPO_ROOT/build"
 
+APP_VERSION="0.1.0"
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --release)    BUILD_CONFIG="release"; shift ;;
         --sign)       SIGN_IDENTITY="$2"; shift 2 ;;
         --output)     OUTPUT_DIR="$2"; shift 2 ;;
+        --version)    APP_VERSION="$2"; shift 2 ;;
         *)            echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -59,7 +62,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>$APP_VERSION</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
