@@ -116,7 +116,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/seen.rb
-          git commit -m "Update Homebrew cask to v${{ steps.meta.outputs.version }} [skip ci]"
+          # No [skip ci]: ci.yml's paths-ignore already excludes Casks/**, so this
+          # sha-only commit costs no run. Dropping the blunt override means a bot
+          # commit that ever touched code would still be gated.
+          git commit -m "Update Homebrew cask to v${{ steps.meta.outputs.version }}"
           git remote set-url origin "https://execsumo:${GH_PAT}@github.com/execsumo/seen.git"
           git push origin HEAD:refs/heads/main
 

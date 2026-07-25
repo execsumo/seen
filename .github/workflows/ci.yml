@@ -1,10 +1,16 @@
 name: CI
 
+# Note: GitHub Actions does not support YAML anchors/aliases, so the
+# paths-ignore list is spelled out for each trigger. Keep the two in sync.
 on:
   push:
     branches: ['main']
+    paths-ignore: ['Casks/**', 'docs/**', '**.md', 'LICENSE']
   pull_request:
     branches: ['main']
+    paths-ignore: ['Casks/**', 'docs/**', '**.md', 'LICENSE']
+  # Path filters apply only to push/pull_request, never to a workflow_call, so
+  # the release gate always runs the suite regardless of what the tag touched.
   workflow_call:
 
 env:
