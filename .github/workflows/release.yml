@@ -13,7 +13,13 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # Gate the release on the same build+test job CI runs on every push, so a
+  # broken suite fails before we touch signing secrets or a notarization slot.
+  test:
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: test
     runs-on: macos-15
     permissions:
       contents: write
