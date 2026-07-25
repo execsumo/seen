@@ -242,6 +242,31 @@ correctly-installed app look broken**; do it first. #2 and #3 are polish and
 share an implementation (a new `seen setup` command group), so they're cheap
 together.
 
+**Status: #2 and #3 shipped to `main` 2026-07-25** (`seen setup claude` /
+`cursor` / `skill`; 52/52 tests, zero warnings). #1 is still open. The two
+sections below are kept for the design rationale — read them before changing the
+setup commands, and see "What shipped" at the end of #3 for what actually landed.
+
+### The `argv[0]` lesson — read before writing any CLI path resolution
+
+`seen setup skill` locates `SKILL.md` relative to its own executable. The first
+implementation used `CommandLine.arguments[0]`, which passed every test and would
+have **failed for every Homebrew user**: when the shell resolves a command via
+`PATH`, `argv[0]` is the bare word `seen`, not a path, so `fileURLWithPath`
+resolves it against the *current directory*. Every test invoked the binary by an
+explicit path (`.build/debug/seen`), so nothing caught it.
+
+Use `Bundle.main.executableURL` (backed by `_NSGetExecutablePath`, correct
+regardless of `argv[0]`), then `resolvingSymlinksInPath()` — Homebrew users come
+through `/opt/homebrew/bin/seen` → `Contents/Resources/bin/seen`, and an
+unresolved symlink sends the lookup to `/opt/homebrew/seen-skill/`.
+
+This is the **same failure shape as v0.1.1**: the test covered the thing being
+added, not the invocation a user actually types. When verifying anything that
+resolves paths from its own location, test it the way a user runs it — bare name
+found on `PATH`, from an unrelated working directory, through the installed
+symlink, on a bundle built by `bundle.sh`.
+
 ### 1. Quit-and-reopen after the Screen Recording grant (highest value)
 
 **The problem.** macOS does not apply a newly-granted Screen Recording
@@ -356,6 +381,42 @@ exists only as a repo file (`.claude/skills/seen/SKILL.md`, committed) and is
 Whichever route, keep a single source of truth — the repo file — and derive the
 shipped copy from it. Two hand-maintained copies will drift, exactly as the
 skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
+
+### What shipped for #2 and #3 (2026-07-25)
+
+- **`Sources/SeenKit/Setup/`** — `SetupCursor` (merge + atomic write),
+  `SetupSkill` (source resolution + install), `SetupClaude` (PATH lookup + the
+  argv as an asserted constant). All logic lives here, not in `seen-cli`, because
+  `SeenTests` is an executable target and cannot import another executable — the
+  same reason `AppCore` exists. The CLI is a thin shell: flags, default paths,
+  printing, exit codes.
+- **`seen setup cursor [--project] [--config <path>]`** — merges only the `seen`
+  key into `~/.cursor/mcp.json`, preserves every other server, writes via temp +
+  `rename`, and **refuses** a file that doesn't parse rather than replacing it.
+  Re-running prints "Already configured" and rewrites nothing. `--config` exists
+  so tests never touch a real config.
+- **`seen setup skill [--dest <dir>] [--project] [--yes]`** — prompts for the
+  destination (`~/.claude/skills` / `./.claude/skills` / another path / skip),
+  gated on `isatty(STDIN_FILENO)` so it exits with a hint instead of blocking in
+  a script, CI, or an agent session. Only Claude Code is offered by name: it's
+  the one harness whose skills layout is verified. `~/.cursor` has `mcp.json` and
+  `hooks.json` but no skills directory, so `--dest` covers everything else
+  instead of inventing paths.
+- **`seen setup claude`** — shells out to `claude mcp add seen -- seen mcp`.
+  Prints the manual command and exits non-zero if `claude` isn't on `PATH`;
+  passes claude's own output through and adds one Seen-level line on a non-zero
+  exit so a duplicate-add doesn't read as Seen breaking.
+- **`bundle.sh`** copies `.claude/skills/seen/SKILL.md` to
+  `Contents/Resources/seen-skill/SKILL.md` with a `cmp` guard, matching the two
+  binary guards. Single source of truth kept: the repo file.
+- **README** points Cursor users at `seen setup cursor` and the skill block at
+  `seen setup skill`, keeping the hand-written JSON and the `curl` as documented
+  fallbacks. `docs/api.md` gained a CLI-surface note (doc written first).
+- Verification worth repeating for any change here: bare `seen` found via `PATH`
+  from an unrelated cwd, on **both** a dev build and a `bundle.sh` bundle reached
+  through a symlink; malformed-config refusal with the file left byte-identical;
+  no-TTY exiting fast; and `setup claude` driven by a fake `claude` earlier on
+  `PATH` so the real `~/.claude.json` is never touched.
 
 ## Known rough edges / next work
 
