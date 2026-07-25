@@ -8,7 +8,7 @@ enum RelaunchHelper {
         
         NSWorkspace.shared.openApplication(at: url, configuration: configuration) { application, error in
             if let error = error {
-                print("Relaunch failed: \(error)")
+                NSLog("Seen: relaunch failed: \(error)")
                 Task { @MainActor in
                     onFailure()
                 }

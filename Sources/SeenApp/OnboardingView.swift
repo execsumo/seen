@@ -8,6 +8,7 @@ public struct OnboardingView: View {
     public init() {}
 
     @State private var didTapRestart = false
+    @State private var relaunchFailed = false
 
     private var phase: PermissionPhase { composition.appState.permissionPhase }
     private var granted: Bool { phase == .granted }
@@ -72,7 +73,7 @@ public struct OnboardingView: View {
                         .foregroundStyle(SeenTheme.Paper.mute)
                         .frame(maxWidth: .infinity, alignment: .center)
                 } else if phase == .requestedPendingRestart {
-                    Text("macOS needs Seen to restart before it can see your screen.")
+                    Text("If you've already allowed Seen in System Settings, it needs to restart before it can see your screen.")
                         .font(.system(size: 11))
                         .foregroundStyle(SeenTheme.Paper.mute)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -86,6 +87,7 @@ public struct OnboardingView: View {
                 if !granted {
                     HStack(spacing: 10) {
                         Button("Open System Settings") {
+                            composition.appState.markPermissionRequested()
                             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
                                 NSWorkspace.shared.open(url)
                             }
@@ -96,8 +98,10 @@ public struct OnboardingView: View {
                         if phase == .requestedPendingRestart {
                             Button(didTapRestart ? "Restarting…" : "Quit and Reopen Seen") {
                                 didTapRestart = true
+                                relaunchFailed = false
                                 RelaunchHelper.relaunch {
                                     didTapRestart = false
+                                    relaunchFailed = true
                                 }
                             }
                             .buttonStyle(PaperPrimaryButtonStyle())
@@ -109,6 +113,13 @@ public struct OnboardingView: View {
                             }
                             .buttonStyle(PaperPrimaryButtonStyle())
                         }
+                    }
+
+                    if relaunchFailed {
+                        Text("Couldn't restart automatically — please quit Seen and open it again.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(SeenTheme.Paper.bad)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
                 Spacer()

@@ -328,6 +328,7 @@ private struct DestinationPane: View {
 private struct PermissionsPane: View {
     @EnvironmentObject var composition: Composition
     @State private var didTapRestart = false
+    @State private var relaunchFailed = false
     
     private var phase: PermissionPhase { composition.appState.permissionPhase }
     private var granted: Bool { phase == .granted }
@@ -365,8 +366,10 @@ private struct PermissionsPane: View {
                                 if phase == .requestedPendingRestart {
                                     Button(didTapRestart ? "Restarting…" : "Quit and Reopen Seen") {
                                         didTapRestart = true
+                                        relaunchFailed = false
                                         RelaunchHelper.relaunch {
                                             didTapRestart = false
+                                            relaunchFailed = true
                                         }
                                     }
                                     .buttonStyle(PaperPrimaryButtonStyle())
@@ -386,6 +389,7 @@ private struct PermissionsPane: View {
 
             if !granted {
                 Button("Open System Settings → Screen Recording") {
+                    composition.appState.markPermissionRequested()
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
                         NSWorkspace.shared.open(url)
                     }
@@ -394,9 +398,15 @@ private struct PermissionsPane: View {
                 .fixedSize()
                 
                 if phase == .requestedPendingRestart {
-                    Text("macOS needs Seen to restart before it can see your screen.")
+                    Text("If you've already allowed Seen in System Settings, it needs to restart before it can see your screen.")
                         .font(.system(size: 11))
                         .foregroundStyle(SeenTheme.Paper.mute)
+                }
+
+                if relaunchFailed {
+                    Text("Couldn't restart automatically — please quit Seen and open it again.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SeenTheme.Paper.bad)
                 }
             }
         }
