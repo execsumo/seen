@@ -57,8 +57,7 @@ public final class HotkeyManager {
     private func hotkeyPressed() {
         Task {
             do {
-                var request = CaptureRequest()
-                request.output = settings.captureOutput
+                let request = HumanCapture.request(output: settings.captureOutput)
                 let result = try await coordinator.perform(request)
                 // Hotkey delivers to the clipboard only: it spawns nothing under
                 // Seen, so a capture never drags a child process's TCC prompts

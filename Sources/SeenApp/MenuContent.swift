@@ -177,9 +177,8 @@ public struct MenuContent: View {
 
     private func capture(target: CaptureRequest.Target?) {
         Task {
-            var request = CaptureRequest()
-            if let target { request.target = target }
-            request.output = composition.settings.captureOutput
+            let request = HumanCapture.request(target: target,
+                                               output: composition.settings.captureOutput)
             if let result = try? await composition.coordinator.perform(request) {
                 try? await composition.pipeline.push(result, to: .clipboard)
             }

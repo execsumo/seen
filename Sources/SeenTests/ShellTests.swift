@@ -89,5 +89,31 @@ let shellTests: [TestCase] = [
             try expectEqual(config.defaultQuality, 0.75)
             try expectEqual(config.defaultMaxDimension, 1568)
         }
+    },
+
+    TestCase("HumanCapture: hotkey/menu captures override the agent token budget") {
+        // The person at the keyboard is not paying tokens by image dimension,
+        // so human-triggered captures get 2K rather than the 1568 px agent cap.
+        let req = HumanCapture.request(output: .both)
+        try expectEqual(req.maxDimension, 2048)
+        try expectEqual(req.maxDimension != nil, true)
+        try expectEqual(req.output, .both)
+        // Format stays nil so human captures still follow the PNG default.
+        try expectEqual(req.format == nil, true)
+
+        // The 2K cap must actually be larger than the agent default, or this
+        // whole policy is a no-op.
+        try expect(HumanCapture.maxDimension > 1568)
+    },
+
+    TestCase("HumanCapture: target and output pass through") {
+        let targeted = HumanCapture.request(target: .app("Chrome"), output: .text)
+        try expectEqual(targeted.target, .app("Chrome"))
+        try expectEqual(targeted.output, .text)
+        try expectEqual(targeted.maxDimension, 2048)
+
+        // No target means all displays, matching CaptureRequest's own default.
+        let untargeted = HumanCapture.request(output: .image)
+        try expectEqual(untargeted.target, .allDisplays)
     }
 ]

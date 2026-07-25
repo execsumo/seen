@@ -89,6 +89,16 @@ struct CaptureRequest {
   dimensions, not bytes). JPEG (quality 0.75) offered per-request for a smaller
   payload; WebP is in the format enum but macOS ImageIO has no WebP encoder yet
   (see handoff.md). HEIC removed — Claude vision doesn't accept it.
+- **Human-triggered captures are not bound by the agent budget.** The hotkey and
+  the menu bar's Capture actions go through `AppCore/HumanCapture`, which caps
+  the longest edge at **2048 px** instead of 1568. The smaller number exists to
+  make an image cheap for a model to look at; nobody bills a clipboard. It stays
+  a cap rather than native resolution so a multi-display grab can't drop a
+  100 MB PNG on the pasteboard.
+- These defaults are tuned to **Anthropic's** vision API. What other harnesses
+  accept and how they re-encode is tracked, with verification dates, in
+  [docs/harness-formats.md](docs/harness-formats.md) — review it before changing
+  a default or adding a format.
 
 ### Interval sessions (with non-bypassable caps)
 - `POST /sessions {interval, duration, target, output}` → session id;
@@ -160,7 +170,7 @@ The server itself is a minimal implementation on `Network.framework`
 
 `POST /capture` returns file **paths** (captures are always saved to the
 configured directory) plus OCR text inline; agents with vision read the file,
-text-only flows use the OCR field. Naming: `capture_2026-07-03_13-50-22_display1.jpg`.
+text-only flows use the OCR field. Naming: `capture_2026-07-03_13-50-22_display1.png`.
 
 ### `seen` CLI examples
 

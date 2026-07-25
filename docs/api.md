@@ -95,7 +95,7 @@ Tools:
 
 | tool | maps to | notes |
 |---|---|---|
-| `capture_screen(target?, output?, max_dimension?)` | `POST /capture` | result content: one `image` block per item (base64 + mimeType) when output includes image, one `text` block with OCR text + saved paths |
+| `capture_screen(target?, output?, format?, max_dimension?)` | `POST /capture` | `format` is `"png"` (default) or `"jpeg"`. Result content: one `image` block per item (base64 + mimeType) when output includes image, one `text` block with OCR text + saved paths |
 | `list_targets()` | `GET /displays` + `GET /apps` | single `text` block of JSON |
 | `start_watch(interval_seconds, duration_seconds, target?)` | `POST /sessions` | |
 | `stop_watch(session_id)` | `DELETE /sessions/{id}` | |

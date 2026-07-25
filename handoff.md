@@ -209,6 +209,31 @@ paths.
    inline image blocks rendering in an actual session.
 6. WebP encoding on this OS version (test asserts encode-or-clean-error).
 
+### 2026-07-25 Human captures get 2K; harness formats now tracked with dates
+- **`AppCore/HumanCapture`** (new) is the single policy for hotkey + menu bar
+  captures: longest edge **2048 px**, format left nil so PNG still applies.
+  Both call sites (`HotkeyManager.swift`, `MenuContent.swift`) previously built
+  a bare `CaptureRequest()`, which fell through to the 1568 px agent default —
+  so a person grabbing their own 5K screen got an image shrunk to fit
+  Anthropic's token budget, for no reason. It stays a cap rather than native
+  resolution so a multi-display grab can't put a ~100 MB PNG on the pasteboard.
+  Covered by 2 tests in `ShellTests.swift` (40/40 green).
+- **`docs/harness-formats.md`** (new) carries a **Last updated** date and a
+  per-harness table. Only the Claude row is evidence-based (jpeg/png/gif/webp,
+  no heic/avif, billed by dimensions); Cursor / Codex / Cline / Gemini-backed
+  rows are explicitly marked *Unverified* rather than left blank, so the gaps
+  are visible. Includes the procedure for verifying a row.
+- **WebP is called out as not supported**, with the two conditions that should
+  trigger an evaluation (macOS gains an encoder or we accept a `libwebp`
+  dependency, **and** a harness measurably benefits). Notes the trap: for Claude
+  the win would be bytes, but billing is by dimensions, so a smaller file may
+  buy literally nothing. Not to be built now.
+- Stale docs fixed: `ARCHITECTURE.md` filename example said `.jpg` (PNG since
+  `b07110f`), and `docs/api.md` — the *normative* contract — omitted the
+  `format?` argument on `capture_screen`, so agents reading it couldn't learn
+  they may request JPEG. Verified against `MCPHandler.swift:44-45,120-121`
+  before documenting.
+
 ## Setup friction: three fixes worth making (identified 2026-07-25)
 
 Setup is close to effortless — install is one command, MCP is one command — but
@@ -347,6 +372,8 @@ skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
 - **App icon** is SF Symbols only; no .icns asset (menu bar uses `eye`
   variants; `SeenMark` is a drawn eye glyph used in Settings/onboarding).
 - **Launch at login** not implemented (SMAppService would be the way).
+- **WebP / per-harness formats** — status and the evaluation trigger now live in
+  `docs/harness-formats.md` (dated). Detail below kept for the platform facts.
 - **WebP encoding** is the ideal default for the agent path (lossless-quality
   text, smaller than PNG, accepted by Claude vision) but macOS ImageIO ships no
   WebP *encoder* — `CGImageDestinationCopyTypeIdentifiers()` omits

@@ -8,7 +8,8 @@ description: See the user's screen via the Seen daemon — take screenshots and 
 Seen is a menu bar daemon (`/Applications/Seen.app`) exposing screen capture +
 Vision OCR over a local Unix socket. Every capture is also saved to disk
 (default `~/Library/Application Support/Seen/Captures/capture_<date>_<time>_<source>.png`,
-≤1568 px on the longest edge; user-configurable in Settings). PNG is the
+≤1568 px on the longest edge for captures you request; user-configurable in
+Settings). PNG is the
 default because it keeps on-screen text sharp for vision at no extra token
 cost — Claude bills images by dimensions, not bytes. Request `format: "jpeg"`
 per capture if you want a smaller payload. Query `seen open` or `/config`'s
