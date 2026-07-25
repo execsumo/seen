@@ -2,11 +2,11 @@
 
 _Last updated: 2026-07-25. Read this before making changes._
 
-## Status: v0.1.0 — code complete and verified live; **not yet shipped**
+## Status: v0.1.0 — **shipped** 2026-07-25
 
-The app works. Distribution does not: `v0.1.0` is tagged on `main` and on
-origin, but no GitHub release exists and the Homebrew path is dead. See
-"Release status" below — that is the top open item.
+Notarized DMG published, Homebrew cask live in `execsumo/homebrew-tap`,
+`brew install --cask seen` resolves. The README's install instructions are now
+true. See "Release status" below for what the first real release proved.
 
 ### 2026-07-25 CI added; release gated on it
 - **`.github/workflows/ci.yml`** (new) — `swift build` + `swift run SeenTests`
@@ -17,26 +17,33 @@ origin, but no GitHub release exists and the Homebrew path is dead. See
   `release` job `needs: test`, so a broken suite fails before the workflow
   touches signing secrets or burns a notarization slot.
 
-### Release status (as of 2026-07-25) — v0.1.0 is tagged but unshipped
-- Tag `v0.1.0` exists locally **and on origin** (`5ea00ef`).
-- The only Release run (2026-07-09 05:35) ended **cancelled**. Cause is visible
-  in timestamps: the signing secrets were added *after* it started — `GH_PAT`
-  05:41, `APPLE_API_KEY*` 05:46–05:48, cert/password/Developer ID 05:58–06:02.
-  All seven secrets are configured now. Nobody re-triggered.
-- Consequences still live on `main`:
-  - No GitHub release, no DMG asset for v0.1.0.
-  - `Casks/seen.rb` still carries the placeholder `sha256 "0000…0000"`.
-  - `execsumo/homebrew-tap` has **no `seen.rb`** (only an unrelated formula).
-  - `README.md` publicly advertises `brew tap execsumo/tap && brew install
-    --cask seen`, which cannot resolve.
-- **Retry constraint — read before re-running.** `workflow_dispatch` will *not*
-  work for v0.1.0: the "Resolve release version" step hard-exits with
-  `ERROR: tag v${VERSION} already exists`. The retry is either delete + re-push
-  the `v0.1.0` tag (fires the `push: tags:['v*']` trigger), or bump to v0.1.1
-  and dispatch that.
-- The workflow's own tail steps (upload release, rewrite the cask sha, commit to
-  `main`, push to the tap) have **never executed** — they are untested in
-  practice, not just unrun.
+### Release status — v0.1.0 shipped 2026-07-25 (run `30164772743`)
+
+**Why it needed a retry.** `v0.1.0` was tagged 2026-07-08, but the Release run
+(2026-07-09 05:35, id `28996583823`) was **cancelled** — the signing secrets
+landed *minutes after* it started (`GH_PAT` 05:41, `APPLE_API_KEY*` 05:46–05:48,
+cert/password/Developer ID 05:58–06:02). Nobody re-triggered, so for two weeks
+`main` advertised a `brew install` that could not resolve.
+
+**How it was retried.** The tag was retargeted from `5ea00ef` to `70c5f0e` (the
+commit adding the CI gate) by deleting and re-pushing it. Note for next time:
+`workflow_dispatch` **cannot** re-run an existing version — "Resolve release
+version" hard-exits with `ERROR: tag v${VERSION} already exists`. Delete +
+re-push the tag (fires `push: tags:['v*']`), or bump the version.
+
+**Verified independently after the run** (not taken on trust):
+- Run `30164772743`: two jobs, `test / build-and-test` **success** → `release`
+  **success**. The CI gate genuinely fires on a tag push via `workflow_call`.
+- Release `v0.1.0` published, asset `Seen-0.1.0.dmg`.
+- DMG sha256 `7f2086be…6275` matches `Casks/seen.rb` on `main` (bot commit
+  `1e8c467`) **and** `execsumo/homebrew-tap`.
+- `xcrun stapler validate` → ticket valid; `spctl --assess --type open` →
+  `accepted, source=Notarized Developer ID`.
+- `brew info --cask execsumo/tap/seen` → 0.1.0.
+
+**The whole tail of the workflow ran for the first time here** — upload release,
+rewrite the cask sha, commit to `main`, push to the tap. It works end to end;
+it is no longer untested.
 
 ## Earlier status: feature-complete, integrated, UX redesign done, verified live
 
@@ -127,7 +134,7 @@ paths.
 
 ## Known rough edges / next work
 
-- **Ship v0.1.0** — the one blocking item; see "Release status" above.
+- ~~**Ship v0.1.0**~~ — done 2026-07-25; see "Release status" above.
 - **`scripts/dmg.sh:6` defaults `NOTARY_PROFILE="heard-notary"`** — a leftover
   from the Heard project. Harmless on the CI path (the workflow passes
   `--api-key-path`, so `NOTARY_AUTH` takes the API-key branch), but a *local*
