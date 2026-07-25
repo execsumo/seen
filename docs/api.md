@@ -104,3 +104,12 @@ Tools:
 `target` in tool inputs: `"all"` (default), `"display:<id>"`, `"app:<name>"`,
 or `"window:<id>"` — flattened to strings because MCP tool schemas favor
 simple parameters; the shim translates to the JSON target shape.
+
+## CLI Commands (`seen`)
+
+In addition to the server endpoints, the `seen` binary provides local setup commands:
+
+- `seen setup claude`: Configures `claude` (Claude Code) by shelling out to its native `mcp add` command.
+- `seen setup cursor [--project] [--config <path>]`: Merges the `seen mcp` server configuration into Cursor's `mcp.json` config.
+- `seen setup skill [--dest <dir>] [--project] [--yes]`: Installs the Seen skill `SKILL.md` to `~/.claude/skills/seen/SKILL.md` or a specified directory, asking for confirmation if the file already exists and is not byte-identical.
+

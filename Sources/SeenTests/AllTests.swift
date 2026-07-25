@@ -5,3 +5,4 @@ let allTests: [TestCase] =
     + coreEngineTests
     + shellTests
     + apiTests
+    + setupTests
