@@ -209,6 +209,129 @@ paths.
    inline image blocks rendering in an actual session.
 6. WebP encoding on this OS version (test asserts encode-or-clean-error).
 
+## Setup friction: three fixes worth making (identified 2026-07-25)
+
+Setup is close to effortless — install is one command, MCP is one command — but
+three spots still cost the user something. **#1 is the only one that makes a
+correctly-installed app look broken**; do it first. #2 and #3 are polish and
+share an implementation (a new `seen setup` command group), so they're cheap
+together.
+
+### 1. Quit-and-reopen after the Screen Recording grant (highest value)
+
+**The problem.** macOS does not apply a newly-granted Screen Recording
+permission to an already-running process. The user clicks Grant, approves in
+System Settings, returns to Seen — and Seen still says permission is missing,
+because `CGPreflightScreenCaptureAccess()` keeps returning false until the
+process restarts. Nothing on screen tells them to relaunch, so the reasonable
+conclusion is "this is broken."
+
+**Where it lives.** Two surfaces do the same thing and both need the fix:
+- `Sources/SeenApp/OnboardingView.swift:80-83` — "Grant Permission" button:
+  `CGRequestScreenCaptureAccess()` then `composition.appState.recheckPermission()`.
+- `Sources/SeenApp/SettingsView.swift:361-364` — the "Grant…" button in
+  `PermissionsPane`, identical pair of calls.
+
+`recheckPermission()` is `Sources/SeenKit/AppCore/AppState.swift:49-51` and is
+just `hasPermission = CGPreflightScreenCaptureAccess()`. Both views also poll it
+on a 1 s timer (`OnboardingView.swift:93`, `SettingsView.swift:382`), so the UI
+faithfully reports "not granted" forever. The onboarding's only reassuring copy
+("You can close this window — Seen lives in your menu bar", line 66) renders
+*only* in the granted branch, so a stuck user never sees any guidance at all.
+
+**What to build.** Track a third state beyond granted/not-granted: *requested
+but not yet effective*. Set a flag when the Grant button runs
+`CGRequestScreenCaptureAccess()` and it returns false (or when preflight is
+still false ~2 s later). In that state, replace the Grant button with a
+prominent **"Quit and Reopen Seen"** button plus one line of copy: *"macOS needs
+Seen to restart before it can see your screen."*
+
+**The relaunch itself — read this before writing it.** The obvious
+implementation (`Process` running `/bin/sh -c "sleep 1; open …"`) is a **trap in
+this specific codebase.** TCC attributes a child process's permission prompts to
+its parent, which is exactly the bug the 2026-07-08 permission hardening fixed:
+`Sources/SeenKit/Push/ProcessRunning.swift:13-27` dlsym's
+`responsibility_spawnattrs_setdisclaim` and `posix_spawn`s with it precisely so
+spawned agents own their own prompts. A naive relaunch helper reintroduces the
+problem this app worked hard to eliminate. Two acceptable routes:
+- **Preferred:** `NSWorkspace.shared.openApplication(at:configuration:)` against
+  `Bundle.main.bundleURL` with `createsNewApplicationInstance = true`, then
+  `NSApp.terminate(nil)` in the completion handler. This goes through
+  LaunchServices rather than forking a child under Seen.
+- **Fallback:** reuse `DefaultProcessRunner`'s disclaiming spawn rather than
+  hand-rolling a `Process`.
+
+Test both orderings — terminating before the new instance is registered can race
+and leave the app not running at all. Also confirm `LSUIElement` (set true in
+`bundle.sh`'s generated Info.plist) doesn't suppress the relaunch.
+
+**How to verify.** This needs a real revoke/grant cycle, which is destructive to
+the developer's own working grant — budget for that. Remove Seen from System
+Settings → Privacy & Security → Screen Recording, relaunch, and walk the flow.
+There is no headless test for this; `SeenTests` can cover the state machine
+(a pure "requested but not effective" predicate in `AppCore`) but not the TCC
+behavior itself. Put the predicate in `AppCore` so it *is* testable, and keep
+the view dumb.
+
+### 2. `seen setup cursor` — stop making people hand-edit JSON
+
+**The problem.** Claude Code users run one command. Cursor users must create
+`~/.cursor/mcp.json` by hand (verified 2026-07-25 against Cursor's docs: there
+is no `mcp add` CLI equivalent), and a malformed file fails silently — Cursor
+just doesn't show the tools.
+
+**What to build.** A `Setup` command group in
+`Sources/seen-cli/SeenCommand.swift`. Subcommands are registered in the
+`CommandConfiguration` at lines 7-13; add `Setup.self` to that array and follow
+the existing `AsyncParsableCommand` pattern used by `Health`, `Capture`, etc.
+
+`seen setup cursor [--project]` should write this into `~/.cursor/mcp.json`
+(or `.cursor/mcp.json` with `--project`):
+
+```json
+{ "mcpServers": { "seen": { "command": "seen", "args": ["mcp"] } } }
+```
+
+**Must merge, not overwrite.** Users have other MCP servers configured;
+clobbering their file is far worse than the friction being fixed. Read the
+existing JSON, insert/replace only the `seen` key, preserve everything else,
+and write atomically (temp file + rename) so a crash can't truncate their
+config. If the file exists but doesn't parse, refuse and say so rather than
+replacing it.
+
+Worth adding alongside: `seen setup claude` shelling out to `claude mcp add`,
+so the command group covers both harnesses symmetrically.
+
+**Convention reminder:** `docs/api.md` is normative for server/CLI/MCP and its
+structure is endpoint-oriented (`## Endpoints`, `## MCP tools`). A `setup`
+command touches neither the wire protocol nor the MCP tool list, so it likely
+needs only a short CLI-surface note — but per the repo's rule, decide and write
+the doc before the code.
+
+### 3. `seen setup skill` — the skill install is a raw `curl`
+
+**The problem.** README currently tells users to `mkdir` and `curl` a file into
+`~/.claude/skills/seen/SKILL.md`. It works, but it's the least confidence-
+inspiring step on the page.
+
+**The non-obvious part: where does the shipped binary get `SKILL.md`?** Today it
+exists only as a repo file (`.claude/skills/seen/SKILL.md`, committed) and is
+**not** in the app bundle. Options, in rough order of preference:
+- Have `bundle.sh` copy it into the bundle (e.g.
+  `Contents/Resources/seen-skill/SKILL.md`) and have the CLI locate it relative
+  to its own executable path. The CLI lives at
+  `Contents/Resources/bin/seen`, so it can resolve `../seen-skill/SKILL.md`.
+  Add a `cmp` guard like the binary ones so a missing file fails the build
+  loudly rather than shipping a broken `setup skill`.
+- Embed the contents as a generated Swift string constant at build time. No
+  filesystem lookup, but adds a codegen step to a repo that currently has none.
+- Fetch from GitHub at runtime. Rejected: makes a local setup command depend on
+  the network, and the CLI does no networking today.
+
+Whichever route, keep a single source of truth — the repo file — and derive the
+shipped copy from it. Two hand-maintained copies will drift, exactly as the
+skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
+
 ## Known rough edges / next work
 
 - ~~**Ship v0.1.0**~~ — done 2026-07-25; see "Release status" above.
