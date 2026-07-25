@@ -8,7 +8,32 @@ Notarized DMG published, Homebrew cask live in `execsumo/homebrew-tap`,
 `brew install --cask seen` resolves. The README's install instructions are now
 true. See "Release status" below for what the first real release proved.
 
-### 2026-07-25 CLI now ships with the app (unreleased — queued for v0.1.1)
+### 2026-07-25 v0.1.1 was broken on arrival — fixed in v0.1.2
+**v0.1.1's app bundle could not launch.** macOS filesystems are
+case-insensitive, so `cp "$CLI" "$APP/Contents/MacOS/seen"` resolved to
+`Contents/MacOS/Seen` and **overwrote the GUI executable with the CLI**. The
+shipped bundle had exactly one binary; `CFBundleExecutable` pointed at it, so
+double-clicking Seen.app ran a CLI that printed usage and exited. No menu bar
+item, no socket, no MCP — strictly worse than v0.1.0's missing CLI.
+
+Fixes in v0.1.2:
+- CLI moved to `Contents/Resources/bin/seen` (no case collision); cask `binary`
+  stanza updated to match.
+- `bundle.sh` now `cmp`s both copied payloads against their source binaries and
+  aborts if either differs, so an overwrite can never ship silently again.
+- `bundle.sh --no-install` added: it used to clobber `/Applications/Seen.app`
+  unconditionally, which made the bundler untestable without wrecking the
+  installed app and its TCC grant.
+
+**How it got through:** the pre-release check ran the *CLI* out of the bundle
+and confirmed it worked. It never checked that the app binary survived — the
+test covered the thing being added, not the thing being broken. When verifying
+a bundle, identify **both** executables. Note `strings` is useless for this
+(Swift literals don't surface) and AppKit is not a discriminator (the CLI links
+it transitively for pasteboard access). Use SwiftUI linkage:
+`otool -L … | grep -c SwiftUI` is >0 for the app, 0 for the CLI.
+
+### 2026-07-25 CLI now ships with the app (v0.1.1, corrected in v0.1.2)
 **v0.1.0 shipped without the `seen` CLI, so MCP cannot work for anyone who
 installed via Homebrew.** `bundle.sh` built only `--product SeenApp` and the
 cask had only an `app` stanza, so the binary that *is* the MCP transport

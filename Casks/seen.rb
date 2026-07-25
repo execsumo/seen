@@ -13,7 +13,7 @@ cask "seen" do
   # `seen mcp` is the MCP transport, so the CLI has to be on PATH for any agent
   # integration to work — shipping the app alone leaves `claude mcp add seen --
   # seen mcp` as command-not-found.
-  binary "#{appdir}/Seen.app/Contents/MacOS/seen"
+  binary "#{appdir}/Seen.app/Contents/Resources/bin/seen"
 
   uninstall quit: "com.execsumo.seen"
 

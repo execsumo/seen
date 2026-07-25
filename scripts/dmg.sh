@@ -9,7 +9,9 @@ API_KEY_ID=""
 API_ISSUER_ID=""
 OUTPUT_DIR="$REPO_ROOT/dist"
 SKIP_NOTARIZE=0
-VERSION="0.1.0"
+# Default tracks the newest tag; the release workflow passes --version.
+VERSION="$(git -C "$REPO_ROOT" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+VERSION="${VERSION:-0.0.0-dev}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

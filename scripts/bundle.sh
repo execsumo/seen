@@ -9,8 +9,12 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_CONFIG="debug"
 SIGN_IDENTITY=""
 OUTPUT_DIR="$REPO_ROOT/build"
+NO_INSTALL=0
 
-APP_VERSION="0.1.0"
+# Default tracks the newest tag so a local build never stamps a stale version.
+# The release workflow always passes --version explicitly.
+APP_VERSION="$(git -C "$REPO_ROOT" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+APP_VERSION="${APP_VERSION:-0.0.0-dev}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -18,6 +22,7 @@ while [[ $# -gt 0 ]]; do
         --sign)       SIGN_IDENTITY="$2"; shift 2 ;;
         --output)     OUTPUT_DIR="$2"; shift 2 ;;
         --version)    APP_VERSION="$2"; shift 2 ;;
+        --no-install) NO_INSTALL=1; shift ;;
         *)            echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -60,7 +65,23 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
-cp "$CLI_BINARY" "$APP_BUNDLE/Contents/MacOS/seen"
+
+# The CLI goes in Resources/bin, NOT Contents/MacOS. macOS filesystems are
+# case-insensitive, so Contents/MacOS/seen IS Contents/MacOS/Seen — copying the
+# CLI there silently overwrites the app's own executable and produces a bundle
+# that cannot launch. That shipped as v0.1.1; hence the guard below.
+mkdir -p "$APP_BUNDLE/Contents/Resources/bin"
+cp "$CLI_BINARY" "$APP_BUNDLE/Contents/Resources/bin/seen"
+
+# Fail loudly if either payload isn't byte-identical to what we just built.
+if ! cmp -s "$BINARY" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"; then
+    echo "ERROR: $APP_BUNDLE/Contents/MacOS/$APP_NAME is not the SeenApp binary."
+    exit 1
+fi
+if ! cmp -s "$CLI_BINARY" "$APP_BUNDLE/Contents/Resources/bin/seen"; then
+    echo "ERROR: $APP_BUNDLE/Contents/Resources/bin/seen is not the seen CLI binary."
+    exit 1
+fi
 
 # Create Info.plist dynamically with LSUIElement true
 cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
@@ -120,7 +141,7 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
     codesign --force \
         $CODESIGN_EXTRA_FLAGS \
         --sign "$SIGN_IDENTITY" \
-        "$APP_BUNDLE/Contents/MacOS/seen"
+        "$APP_BUNDLE/Contents/Resources/bin/seen"
     codesign --force \
         $CODESIGN_EXTRA_FLAGS \
         --entitlements "$APP_BUNDLE/Contents/Resources/Seen.entitlements" \
@@ -128,14 +149,18 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
         "$APP_BUNDLE"
 else
     echo "==> Ad-hoc signing..."
-    codesign --force --sign - "$APP_BUNDLE/Contents/MacOS/seen"
+    codesign --force --sign - "$APP_BUNDLE/Contents/Resources/bin/seen"
     codesign --force --sign - \
         --entitlements "$APP_BUNDLE/Contents/Resources/Seen.entitlements" \
         "$APP_BUNDLE"
 fi
 
-echo "==> Installing to $INSTALLED..."
-rm -rf "$INSTALLED"
-cp -R "$APP_BUNDLE" "$INSTALLED"
+if [[ "$NO_INSTALL" -eq 1 ]]; then
+    echo "==> Skipping install (--no-install). Bundle at $APP_BUNDLE"
+else
+    echo "==> Installing to $INSTALLED..."
+    rm -rf "$INSTALLED"
+    cp -R "$APP_BUNDLE" "$INSTALLED"
+fi
 
 echo "==> Done."
