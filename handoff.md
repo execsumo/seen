@@ -8,6 +8,12 @@ Notarized DMG published, Homebrew cask live in `execsumo/homebrew-tap`,
 `brew install --cask seen` resolves. The README's install instructions are now
 true. See "Release status" below for what the first real release proved.
 
+**Unreleased work sitting on `main` (2026-07-25, not pushed, no tag):** all three
+setup-friction fixes — the `seen setup` command group and the quit-and-reopen
+permission flow. 57/57 tests, zero warnings. **One gate before any release: walk a
+real Screen Recording revoke/grant cycle** (see "Setup friction" → #1 → "Where
+this stands"). Everything else in that work is verified.
+
 ### 2026-07-25 v0.1.1 was broken on arrival — fixed in v0.1.2
 **v0.1.1's app bundle could not launch.** macOS filesystems are
 case-insensitive, so `cp "$CLI" "$APP/Contents/MacOS/seen"` resolved to
@@ -242,10 +248,14 @@ correctly-installed app look broken**; do it first. #2 and #3 are polish and
 share an implementation (a new `seen setup` command group), so they're cheap
 together.
 
-**Status: #2 and #3 shipped to `main` 2026-07-25** (`seen setup claude` /
-`cursor` / `skill`; 52/52 tests, zero warnings). #1 is still open. The two
-sections below are kept for the design rationale — read them before changing the
-setup commands, and see "What shipped" at the end of #3 for what actually landed.
+**Status: all three shipped to `main` 2026-07-25** — `seen setup claude` /
+`cursor` / `skill` (#2, #3) and the quit-and-reopen phase + relaunch button (#1).
+57/57 tests, zero warnings, nothing pushed. The sections below are kept for the
+design rationale; each ends with what actually landed.
+
+**The one thing still outstanding: nobody has run a real Screen Recording
+revoke/grant cycle against #1.** It is the only part of this work that no test
+can reach. See "Where this stands" at the end of #1.
 
 ### The `argv[0]` lesson — read before writing any CLI path resolution
 
@@ -268,6 +278,10 @@ found on `PATH`, from an unrelated working directory, through the installed
 symlink, on a bundle built by `bundle.sh`.
 
 ### 1. Quit-and-reopen after the Screen Recording grant (highest value)
+
+> **STATUS 2026-07-25: shipped to `main`, but NOT verified against a real TCC
+> revoke/grant cycle — that walkthrough is the one thing still outstanding.** See
+> "Where this stands" at the end of this section.
 
 **The problem.** macOS does not apply a newly-granted Screen Recording
 permission to an already-running process. The user clicks Grant, approves in
@@ -322,6 +336,52 @@ There is no headless test for this; `SeenTests` can cover the state machine
 (a pure "requested but not effective" predicate in `AppCore`) but not the TCC
 behavior itself. Put the predicate in `AppCore` so it *is* testable, and keep
 the view dumb.
+
+### Where this stands (2026-07-25)
+
+**What shipped.**
+- **`Sources/SeenKit/AppCore/PermissionPhase.swift`** — `PermissionPhase`
+  (`needed` / `requestedPendingRestart` / `granted`) plus a pure
+  `resolvePermissionPhase(granted:requestedAt:now:)`. No `CoreGraphics` inside, so
+  it's headlessly testable; 5 cases in `Sources/SeenTests/PermissionPhaseTests.swift`.
+- **The self-clearing rule is the load-bearing design decision:** `granted == true`
+  returns `.granted` unconditionally, so the existing 1 s poll recovers on its own
+  if macOS ever applies a grant live. That is what makes the relaunch button safe
+  to ship *without* having run the destructive TCC test — the UI can't strand a
+  user who is actually granted. Don't "optimize" that branch away.
+- 2 s threshold before showing the restart button, so it doesn't flash while the
+  user is still dealing with the system dialog.
+- **`AppState`** gained observable `permissionPhase` + `markPermissionRequested()`;
+  `recheckPermission(now:)` recomputes both. `hasPermission` is unchanged for
+  existing readers.
+- **`Sources/SeenApp/RelaunchHelper.swift`** — `NSWorkspace.shared.openApplication`
+  against `Bundle.main.bundleURL` with `createsNewApplicationInstance = true`.
+  `NSApp.terminate` fires **only** in the completion handler's success branch; on
+  error it does not terminate and surfaces manual-quit copy instead. The button
+  disables after one tap.
+- Both views (`OnboardingView`, `SettingsView`'s `PermissionsPane`) render a
+  "Quit and Reopen Seen" button in the pending phase, a "Restart Needed" pill, and
+  copy in **every** phase — previously the only reassuring line rendered solely in
+  the granted branch, so a stuck user saw nothing.
+- **"Open System Settings" also counts as a request.** Only wiring the Grant
+  button left the original bug fully intact for anyone who granted directly in
+  System Settings — the path macOS's own flow pushes people down. Because that
+  click doesn't prove a grant happened, the copy is worded to be true either way:
+  *"If you've already allowed Seen in System Settings, it needs to restart…"*
+
+**What is NOT verified — do this before claiming the fix works.** Nobody has run a
+real revoke/grant cycle. Remove Seen from System Settings → Privacy & Security →
+Screen Recording, relaunch, and walk both surfaces. Two failure modes to watch
+that no test can reach:
+1. **App not running at all** — terminate racing ahead of the new instance being
+   registered.
+2. **Two live instances** — if terminate silently fails, the second instance's
+   stale-socket replacement steals the UDS from the first. Check `seen health`
+   and `pgrep -fl Seen` after the relaunch, not just that a menu bar icon exists.
+
+Also unconfirmed: whether `LSUIElement` (true in `bundle.sh`'s generated
+Info.plist) affects focus behavior on relaunch for a menu-bar-only app. It should
+not block the relaunch itself.
 
 ### 2. `seen setup cursor` — stop making people hand-edit JSON
 

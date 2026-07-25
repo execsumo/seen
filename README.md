@@ -213,6 +213,7 @@ SeenKit/Coordinator capture→OCR→encode→store orchestration + event fan-out
 SeenKit/Sessions    interval sessions, hard caps enforced
 SeenKit/Server      HTTP codec, UDS server, router, API client, MCP handler
 SeenKit/Push        hotkey delivery: templates, tmux, clipboard
+SeenKit/Setup       `seen setup` logic: MCP-config merge, skill install
 SeenKit/AppCore     pure app logic: settings, icon state (headless-testable)
 SeenApp             SwiftUI menu bar shell + Settings + composition root
 seen-cli            `seen` CLI + `seen mcp` stdio shim

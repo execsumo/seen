@@ -27,6 +27,9 @@ seen/
 │   │   ├── Sessions/       # Interval-capture session manager (hard caps)
 │   │   ├── Server/         # HTTP-over-Unix-socket API router + MCP handler
 │   │   ├── Push/           # Hotkey → destination-CLI pipeline
+│   │   ├── Setup/          # `seen setup` logic: MCP-config merge, skill install,
+│   │   │                   #   claude-CLI lookup. Pure; every path injected so
+│   │   │                   #   tests never touch a real ~/.cursor or ~/.claude
 │   │   └── AppCore/        # Pure app logic (settings, icon state) — lives in
 │   │                       #   SeenKit because executable targets can't be
 │   │                       #   imported by the test runner
