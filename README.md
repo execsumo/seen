@@ -1,90 +1,53 @@
 # Seen
 
-A macOS menu bar app that acts as a **vision bridge for CLI-based LLM agents**:
-agents pull screenshots and OCR text from your screen on demand through a local
-API, and you push screen context into your agent session with a global hotkey.
+**Let your CLI agent see your screen.**
 
-- **Capture** all displays, one display, an app's windows, or a single window —
-  via ScreenCaptureKit one-shots (no persistent streams, near-zero idle cost).
-- **OCR** with Apple's Vision framework (`.accurate`, on-device), run on the
-  full-resolution capture *before* downscaling so small text survives.
-- **Token-aware images**: downscaled to 1568 px longest edge and encoded PNG
-  automatically — lossless, so on-screen text stays sharp for the vision model at
-  no extra token cost (Claude bills images by dimensions, not bytes). No knobs to
-  get wrong. Agents can override format (e.g. JPEG for a smaller payload), quality,
-  and size per request.
-- **Three access doors** for agents: an MCP stdio server, a `seen` CLI, and a
-  raw HTTP-over-Unix-socket API.
-- **Interval capture** with compiled-in safety caps no agent can override.
-- **Global hotkey** that captures your screen and copies the path (and OCR text)
-  to the clipboard, ready to paste into any agent session.
+Seen is a macOS menu bar app that gives coding agents — Claude Code, Cursor,
+Codex, anything that speaks MCP — screenshots and on-screen text on demand. Ask
+"what's on my screen?" and the agent just looks.
 
-Requires macOS 15+, Apple Silicon recommended. No Xcode needed — Command Line
-Tools are enough.
+Requires macOS 15+.
 
-## Installation
+---
 
-**Via Homebrew (Recommended)**
+## Quickstart
+
+**1. Install**
 
 ```bash
-brew tap execsumo/tap
-brew install --cask seen
+brew install --cask execsumo/tap/seen
 ```
 
-To update to the latest version:
-```bash
-brew upgrade --cask seen
-```
+That's the whole install. It puts `Seen.app` in `/Applications` and the `seen`
+command on your PATH.
 
-### Manual Build
+**2. Launch it and grant one permission**
 
-```bash
-swift build                 # compile everything
-swift run SeenTests         # run the test suite (executable runner, no XCTest)
-./scripts/bundle.sh         # build → Seen.app → /Applications (auto-signs:
-                            #   Developer ID → "Dev Cert" → ad-hoc fallback)
-./scripts/bundle.sh --release --sign "Dev Cert"   # options
-```
+Open **Seen** from your Applications folder. It walks you through granting
+**Screen Recording** — the only permission it ever asks for. macOS may ask you
+to quit and reopen Seen for the grant to take effect.
 
-Launch **Seen** from /Applications. First run walks you through granting
-**Screen Recording** (the only permission Seen needs). Stable code signing
-keeps that grant across rebuilds.
+Seen then lives in your menu bar. There's no window to keep open.
 
-## Programmatic access
-
-The app serves HTTP over a Unix domain socket at
-`~/Library/Application Support/Seen/seen.sock` (mode 0600 — only your user's
-processes can connect; nothing listens on the network). Full endpoint
-reference: [docs/api.md](docs/api.md).
-
-### 1. `seen` CLI
-
-The CLI ships inside the app bundle, and the Homebrew cask symlinks it onto
-your PATH — so a `brew install` gives you `seen` with nothing further to do.
-Building manually? `./scripts/bundle.sh` embeds it too; link it yourself with
-`ln -s /Applications/Seen.app/Contents/MacOS/seen /usr/local/bin/seen`.
+**3. Check it works**
 
 ```bash
-seen health                              # daemon + permission status
-seen targets                             # list displays and capturable apps
-seen capture --app "Google Chrome" --ocr-only
-seen capture --json                      # all displays, image+text, JSON out
-seen watch start --interval 10s --duration 5m
-seen watch list / seen watch stop <id>
-seen open                                # open the screenshots folder
+seen health
 ```
 
-### 2. MCP (recommended for agents)
-
-**MCP runs over the CLI** — `seen mcp` is a stdio shim over the socket — so
-`seen` must be on your PATH first. That's why this section comes second.
+**4. Connect your agent**
 
 ```bash
-claude mcp add seen -- seen mcp          # Claude Code
+claude mcp add seen -- seen mcp
 ```
 
-Cursor has no CLI equivalent; write `~/.cursor/mcp.json` (global) or
-`.cursor/mcp.json` (project-local):
+Now ask Claude Code *"what's on my screen right now?"* — that's it.
+
+<details>
+<summary><b>Cursor, Codex, and other agents</b></summary>
+
+Cursor has no `mcp add` command, so add it to `~/.cursor/mcp.json` (all
+projects) or `.cursor/mcp.json` (one project):
 
 ```json
 {
@@ -94,60 +57,137 @@ Cursor has no CLI equivalent; write `~/.cursor/mcp.json` (global) or
 }
 ```
 
-Other harnesses (codex, cline, agy): register `seen mcp` as a stdio MCP server
-in their own config.
+Any other MCP-capable agent: register `seen mcp` as a **stdio** server. The
+command is `seen`, the argument is `mcp`.
+</details>
 
-Tools exposed: `capture_screen(target?, output?, format?, max_dimension?)`
-(returns the image inline as MCP image blocks + OCR text + saved path),
-`list_targets`, `start_watch`, `stop_watch`, `watch_status`. Targets are
-strings: `"all"`, `"display:<id>"`, `"app:<name>"`, `"window:<id>"`.
+<details>
+<summary><b>Give Claude Code deeper instructions (optional)</b></summary>
 
-### 3. Raw HTTP
-
-Needs nothing installed beyond the running app — no CLI, no MCP registration.
+The repo ships an agent skill that teaches Claude Code when to look at your
+screen and how to choose between OCR text and images:
 
 ```bash
-curl --unix-socket ~/Library/Application\ Support/Seen/seen.sock \
-     http://seen/health
+mkdir -p ~/.claude/skills/seen
+curl -o ~/.claude/skills/seen/SKILL.md \
+  https://raw.githubusercontent.com/execsumo/seen/main/.claude/skills/seen/SKILL.md
+```
+</details>
+
+**Updating:** `brew upgrade --cask seen`
+
+---
+
+## Using it
+
+### From your agent
+
+Once MCP is connected, just ask. Behind the scenes the agent gets
+`capture_screen`, `list_targets`, `start_watch`, `stop_watch`, and
+`watch_status`.
+
+### From your terminal
+
+```bash
+seen capture                             # capture everything
+seen capture --app "Google Chrome"       # just one app's windows
+seen capture --ocr-only                  # text only, no image
+seen targets                             # what can I capture?
+seen watch start --interval 10s --duration 5m   # capture on a schedule
+seen open                                # open the screenshots folder
+```
+
+Add `--json` to any capture for machine-readable output.
+
+### With a hotkey
+
+Press **⌃⌥⌘S** anywhere to capture your screen and copy the file path and OCR
+text to your clipboard, ready to paste into any agent session. Change the
+shortcut in **Settings → Hotkey**, and choose what gets copied in
+**Settings → Destination**.
+
+Delivery is clipboard-only on purpose: copying launches nothing, so a capture
+never drags another program's permission prompts onto Seen.
+
+### Where captures go
+
+`~/Library/Application Support/Seen/Captures/`, named like
+`capture_2026-07-03_13-50-22_display-1.png`. Change it in **Settings → General**.
+
+The default deliberately avoids `~/Pictures` so Seen never triggers a "wants to
+access your Pictures folder" prompt.
+
+---
+
+## How it works
+
+Seen captures with **ScreenCaptureKit** (one-shots, not persistent streams, so
+it costs almost nothing while idle) and reads text with Apple's **Vision**
+framework on-device. OCR runs on the full-resolution image *before* downscaling,
+so small text survives.
+
+Images are automatically sized for vision models: 1568 px on the longest edge,
+PNG. PNG is lossless, so on-screen text stays sharp at no extra token cost —
+Claude bills images by dimensions, not bytes. Agents can request JPEG per
+capture if they want a smaller payload.
+
+### Three ways in
+
+The app serves HTTP over a Unix domain socket at
+`~/Library/Application Support/Seen/seen.sock` (mode 0600 — only your user can
+connect; **nothing listens on the network**).
+
+| | Needs | Best for |
+|---|---|---|
+| **MCP** | the `seen` CLI on PATH | agents — images come back inline |
+| **`seen` CLI** | the CLI on PATH | you, at a terminal; scripts |
+| **Raw HTTP** | nothing but the running app | anything that can `curl` |
+
+MCP runs *through* the CLI — `seen mcp` is a thin stdio shim over the socket —
+so the CLI has to be installed for MCP to work. Homebrew handles that for you.
+
+```bash
 curl --unix-socket ~/Library/Application\ Support/Seen/seen.sock \
      -d '{"target":{"app":"Teams"},"output":"both"}' http://seen/capture
 ```
 
-### Safety caps (compiled in, not configurable)
+Full endpoint reference: [docs/api.md](docs/api.md).
 
-Interval sessions: interval ≥ 5 s, duration ≤ 30 min, ≤ 2 concurrent sessions,
-≤ 200 captures per session. Out-of-bounds requests are rejected with an
-explicit error, never silently clamped.
+### Safety caps
 
-## Hotkey push
+Interval sessions are capped in the binary, and no agent can raise them:
+interval ≥ 5 s, duration ≤ 30 min, ≤ 2 concurrent sessions, ≤ 200 captures per
+session. Out-of-bounds requests are rejected with an explicit error rather than
+silently clamped.
 
-Set a global hotkey in **Settings → Hotkey** (default ⌃⌥⌘S). On press, Seen
-captures your screen and copies the capture's file path — and its OCR text — to
-the clipboard, so you can paste it into any agent session. In **Settings →
-Destination** you choose what the push *includes* (image + text, image only, or
-text only; agents still pick their own output per request).
+---
 
-Delivery is clipboard-only by design: copying spawns nothing under Seen, so a
-capture never drags a child process's permission prompts onto the app. Agents
-that want a capture delivered elsewhere use the API/MCP/CLI directly.
+## Building from source
 
-## Storage & menu bar
+No Xcode needed — Command Line Tools are enough.
 
-Every capture — API, MCP, CLI, hotkey, or menu — is saved to the directory set
-in **Settings → General** (default `~/Library/Application Support/Seen/Captures`)
-as `capture_2026-07-03_13-50-22_display-1.png`. The default is deliberately kept
-out of `~/Pictures` so writing captures never triggers a TCC "Pictures folder"
-prompt — point it at `~/Pictures/Seen` in Settings if you prefer. The menu bar
-icon shows three states: idle, recent capture (3 s flash), and interval-session
-active. The menu is a Paper-styled panel: a status header (which doubles as the
-agent-bridge indicator — "Agent Bridge Running" when the socket is live), Capture
-Now, per-app capture, the screenshots folder, and running-session stops. Agents
-connect via the README's setup commands, not the menu.
+```bash
+swift build                 # compile
+swift run SeenTests         # 38 tests, no Screen Recording permission needed
+./scripts/bundle.sh         # build → Seen.app → /Applications
+./scripts/bundle.sh --no-install   # build without touching /Applications
+```
 
-## Architecture
+`bundle.sh` embeds the CLI at `Seen.app/Contents/Resources/bin/seen`. To put it
+on your PATH from a source build:
 
-Clean Architecture in one SPM package — see [ARCHITECTURE.md](ARCHITECTURE.md)
-for the full design and [docs/api.md](docs/api.md) for the API contract.
+```bash
+ln -s /Applications/Seen.app/Contents/Resources/bin/seen /usr/local/bin/seen
+```
+
+> If you already installed via Homebrew, don't also run `bundle.sh` — it writes
+> directly to `/Applications` and Homebrew will lose track of what's installed.
+> Pick one.
+
+### Architecture
+
+Clean Architecture in one SPM package — see
+[ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
 ```
 SeenKit/Domain      frozen contract: models, protocols, session caps, errors
@@ -165,14 +205,8 @@ seen-cli            `seen` CLI + `seen mcp` stdio shim
 SeenTests           executable test runner (works with CLT alone)
 ```
 
-Everything downstream of Domain depends on protocols only; `swift run
-SeenTests` exercises the whole stack with mocks (38 tests) — no Screen
-Recording permission needed to develop.
+Everything downstream of Domain depends on protocols only, so the whole stack is
+testable with mocks — no Screen Recording permission needed to develop.
 
-## Development
-
-- `Heard`-style workflow: no Xcode project; edit, `swift build`, bundle.
-- Tests: add a `[TestCase]` array in `Sources/SeenTests/`, register it in
-  `AllTests.swift`.
-- The API contract in `docs/api.md` is normative — server, CLI, and MCP shim
-  all conform to it; change the doc first.
+The API contract in [docs/api.md](docs/api.md) is normative: server, CLI, and
+MCP shim all conform to it. Change the doc first.

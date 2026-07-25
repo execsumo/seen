@@ -40,14 +40,15 @@ cask had only an `app` stanza, so the binary that *is* the MCP transport
 (`seen mcp` is a stdio shim over the socket) shipped nowhere — while
 `SKILL.md` told agents to run `claude mcp add seen -- seen mcp`. Fixed on
 `main`, **not yet released**:
-- `bundle.sh` builds `--product SeenApp --product seen` and copies the CLI to
-  `Seen.app/Contents/MacOS/seen`.
+- `bundle.sh` builds both products and copies the CLI into the bundle. (It
+  originally landed at `Contents/MacOS/seen`, which is what broke v0.1.1; the
+  live path is `Contents/Resources/bin/seen`.)
 - Signing is now **inside-out** — the nested `seen` binary is signed before the
   bundle, or the outer signature seals an unsigned executable and notarization
   rejects the app. Verified in a scratch bundle: `codesign --verify --deep
   --strict` passes, the nested binary verifies independently, and it runs.
-- `Casks/seen.rb` gained `binary "#{appdir}/Seen.app/Contents/MacOS/seen"` so
-  brew symlinks it onto PATH.
+- `Casks/seen.rb` gained a `binary` stanza so brew symlinks the CLI onto PATH
+  (now pointing at `Contents/Resources/bin/seen`).
 - README reordered (CLI first, then MCP, then raw HTTP) because MCP depends on
   the CLI; raw HTTP over the socket is the only door needing nothing installed.
 - Cursor documented alongside Claude Code: no CLI equivalent to
