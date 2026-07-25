@@ -57,19 +57,12 @@ The app serves HTTP over a Unix domain socket at
 processes can connect; nothing listens on the network). Full endpoint
 reference: [docs/api.md](docs/api.md).
 
-### 1. MCP (recommended for agents)
+### 1. `seen` CLI
 
-```bash
-claude mcp add seen -- seen mcp          # Claude Code
-# codex/cline/agy: register `seen mcp` as a stdio MCP server in their config
-```
-
-Tools exposed: `capture_screen(target?, output?, max_dimension?)` (returns the
-image inline as MCP image blocks + OCR text + saved path), `list_targets`,
-`start_watch`, `stop_watch`, `watch_status`. Targets are strings: `"all"`,
-`"display:<id>"`, `"app:<name>"`, `"window:<id>"`.
-
-### 2. `seen` CLI
+The CLI ships inside the app bundle, and the Homebrew cask symlinks it onto
+your PATH — so a `brew install` gives you `seen` with nothing further to do.
+Building manually? `./scripts/bundle.sh` embeds it too; link it yourself with
+`ln -s /Applications/Seen.app/Contents/MacOS/seen /usr/local/bin/seen`.
 
 ```bash
 seen health                              # daemon + permission status
@@ -81,9 +74,37 @@ seen watch list / seen watch stop <id>
 seen open                                # open the screenshots folder
 ```
 
-Install the CLI somewhere on your PATH: `cp .build/debug/seen /usr/local/bin/`.
+### 2. MCP (recommended for agents)
+
+**MCP runs over the CLI** — `seen mcp` is a stdio shim over the socket — so
+`seen` must be on your PATH first. That's why this section comes second.
+
+```bash
+claude mcp add seen -- seen mcp          # Claude Code
+```
+
+Cursor has no CLI equivalent; write `~/.cursor/mcp.json` (global) or
+`.cursor/mcp.json` (project-local):
+
+```json
+{
+  "mcpServers": {
+    "seen": { "command": "seen", "args": ["mcp"] }
+  }
+}
+```
+
+Other harnesses (codex, cline, agy): register `seen mcp` as a stdio MCP server
+in their own config.
+
+Tools exposed: `capture_screen(target?, output?, format?, max_dimension?)`
+(returns the image inline as MCP image blocks + OCR text + saved path),
+`list_targets`, `start_watch`, `stop_watch`, `watch_status`. Targets are
+strings: `"all"`, `"display:<id>"`, `"app:<name>"`, `"window:<id>"`.
 
 ### 3. Raw HTTP
+
+Needs nothing installed beyond the running app — no CLI, no MCP registration.
 
 ```bash
 curl --unix-socket ~/Library/Application\ Support/Seen/seen.sock \

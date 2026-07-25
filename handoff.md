@@ -8,6 +8,34 @@ Notarized DMG published, Homebrew cask live in `execsumo/homebrew-tap`,
 `brew install --cask seen` resolves. The README's install instructions are now
 true. See "Release status" below for what the first real release proved.
 
+### 2026-07-25 CLI now ships with the app (unreleased — queued for v0.1.1)
+**v0.1.0 shipped without the `seen` CLI, so MCP cannot work for anyone who
+installed via Homebrew.** `bundle.sh` built only `--product SeenApp` and the
+cask had only an `app` stanza, so the binary that *is* the MCP transport
+(`seen mcp` is a stdio shim over the socket) shipped nowhere — while
+`SKILL.md` told agents to run `claude mcp add seen -- seen mcp`. Fixed on
+`main`, **not yet released**:
+- `bundle.sh` builds `--product SeenApp --product seen` and copies the CLI to
+  `Seen.app/Contents/MacOS/seen`.
+- Signing is now **inside-out** — the nested `seen` binary is signed before the
+  bundle, or the outer signature seals an unsigned executable and notarization
+  rejects the app. Verified in a scratch bundle: `codesign --verify --deep
+  --strict` passes, the nested binary verifies independently, and it runs.
+- `Casks/seen.rb` gained `binary "#{appdir}/Seen.app/Contents/MacOS/seen"` so
+  brew symlinks it onto PATH.
+- README reordered (CLI first, then MCP, then raw HTTP) because MCP depends on
+  the CLI; raw HTTP over the socket is the only door needing nothing installed.
+- Cursor documented alongside Claude Code: no CLI equivalent to
+  `claude mcp add`, so it's `~/.cursor/mcp.json` / `.cursor/mcp.json` with
+  `{"mcpServers":{"seen":{"command":"seen","args":["mcp"]}}}`.
+
+**Watch out for stale installs.** `/Applications/Seen.app` is only rebuilt by
+`./scripts/bundle.sh`, and a hand-copied `seen` on PATH never updates at all.
+Both drift silently from `main` — a build from before `b07110f` still shows the
+deleted "Agent Access" pane and the `Copy “claude mcp add” command` menu row.
+Check `ls -l /Applications/Seen.app/Contents/MacOS/` against `git log` before
+concluding the app disagrees with the code.
+
 ### 2026-07-25 CI added; release gated on it
 - **`.github/workflows/ci.yml`** (new) — `swift build` + `swift run SeenTests`
   on every push/PR to `main`, macos-15. Everything in the suite is headless
@@ -16,6 +44,15 @@ true. See "Release status" below for what the first real release proved.
 - **`release.yml` now gates on it** — CI is exposed via `workflow_call` and the
   `release` job `needs: test`, so a broken suite fails before the workflow
   touches signing secrets or burns a notarization slot.
+- The cask bot commit no longer carries a skip-CI override; `ci.yml` instead
+  uses `paths-ignore` for `Casks/**`, `docs/**`, `**.md`, `LICENSE`. Same zero
+  runs for a sha-only rewrite, but a bot commit that ever touched Swift is
+  gated rather than silently skipped. Path filters don't apply to
+  `workflow_call`, so the release gate is unaffected.
+- Two Actions traps worth remembering: **YAML anchors are not supported** in
+  workflow files (the ignore list is spelled out per trigger), and the skip-CI
+  token is honored **anywhere in a commit message, body included** — a commit
+  merely describing it will skip its own run.
 
 ### Release status — v0.1.0 shipped 2026-07-25 (run `30164772743`)
 

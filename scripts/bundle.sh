@@ -26,17 +26,27 @@ APP_NAME="Seen"
 APP_BUNDLE="$OUTPUT_DIR/$APP_NAME.app"
 INSTALLED="/Applications/$APP_NAME.app"
 
+# The `seen` CLI is built and embedded alongside the app, not just the app
+# itself: `seen mcp` is the MCP transport, so an install without the CLI cannot
+# serve agents at all. The cask's `binary` stanza symlinks it onto PATH.
 echo "==> Building $APP_NAME ($BUILD_CONFIG)..."
 if [[ "$BUILD_CONFIG" == "release" ]]; then
-    swift build -c release --product SeenApp --package-path "$REPO_ROOT"
-    BINARY="$REPO_ROOT/.build/release/SeenApp"
+    swift build -c release --product SeenApp --product seen --package-path "$REPO_ROOT"
+    BUILD_BIN_DIR="$REPO_ROOT/.build/release"
 else
-    swift build --product SeenApp --package-path "$REPO_ROOT"
-    BINARY="$REPO_ROOT/.build/debug/SeenApp"
+    swift build --product SeenApp --product seen --package-path "$REPO_ROOT"
+    BUILD_BIN_DIR="$REPO_ROOT/.build/debug"
 fi
+BINARY="$BUILD_BIN_DIR/SeenApp"
+CLI_BINARY="$BUILD_BIN_DIR/seen"
 
 if [[ ! -f "$BINARY" ]]; then
     echo "ERROR: Binary not found at $BINARY"
+    exit 1
+fi
+
+if [[ ! -f "$CLI_BINARY" ]]; then
+    echo "ERROR: CLI binary not found at $CLI_BINARY"
     exit 1
 fi
 
@@ -46,6 +56,7 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BINARY" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+cp "$CLI_BINARY" "$APP_BUNDLE/Contents/MacOS/seen"
 
 # Create Info.plist dynamically with LSUIElement true
 cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
@@ -93,6 +104,9 @@ if [[ -z "$SIGN_IDENTITY" ]]; then
     fi
 fi
 
+# Signing is inside-out: the nested `seen` executable must be signed before the
+# bundle that contains it, or the outer signature seals an unsigned binary and
+# notarization rejects the whole app.
 if [[ -n "$SIGN_IDENTITY" ]]; then
     echo "==> Signing with identity: $SIGN_IDENTITY"
     CODESIGN_EXTRA_FLAGS=""
@@ -101,11 +115,16 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
     fi
     codesign --force \
         $CODESIGN_EXTRA_FLAGS \
+        --sign "$SIGN_IDENTITY" \
+        "$APP_BUNDLE/Contents/MacOS/seen"
+    codesign --force \
+        $CODESIGN_EXTRA_FLAGS \
         --entitlements "$APP_BUNDLE/Contents/Resources/Seen.entitlements" \
         --sign "$SIGN_IDENTITY" \
         "$APP_BUNDLE"
 else
     echo "==> Ad-hoc signing..."
+    codesign --force --sign - "$APP_BUNDLE/Contents/MacOS/seen"
     codesign --force --sign - \
         --entitlements "$APP_BUNDLE/Contents/Resources/Seen.entitlements" \
         "$APP_BUNDLE"

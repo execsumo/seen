@@ -7,9 +7,12 @@ description: See the user's screen via the Seen daemon — take screenshots and 
 
 Seen is a menu bar daemon (`/Applications/Seen.app`) exposing screen capture +
 Vision OCR over a local Unix socket. Every capture is also saved to disk
-(default `~/Library/Application Support/Seen/Captures/capture_<date>_<time>_<source>.jpg`,
-≤1568 px, ~300 KB; user-configurable in Settings). Query `seen open` or
-`/config`'s `saveDirectoryPath` for the live location.
+(default `~/Library/Application Support/Seen/Captures/capture_<date>_<time>_<source>.png`,
+≤1568 px on the longest edge; user-configurable in Settings). PNG is the
+default because it keeps on-screen text sharp for vision at no extra token
+cost — Claude bills images by dimensions, not bytes. Request `format: "jpeg"`
+per capture if you want a smaller payload. Query `seen open` or `/config`'s
+`saveDirectoryPath` for the live location.
 
 ## Quick recipes (CLI — always available as `seen`)
 
@@ -34,12 +37,27 @@ do other work, then read the new `capture_*` files after `endsAt`.
 
 ## Other doors
 
-- **MCP** (if registered: `claude mcp add seen -- seen mcp`): tools
-  `capture_screen(target?, output?, max_dimension?)` — returns the image
-  inline as MCP image blocks + OCR text — plus `list_targets`, `start_watch`,
-  `stop_watch`, `watch_status`. Targets: `"all"` | `"display:<id>"` |
-  `"app:<name>"` | `"window:<id>"`.
-- **Raw HTTP** over the socket:
+- **MCP** — tools `capture_screen(target?, output?, format?, max_dimension?)`,
+  returning the image inline as MCP image blocks + OCR text, plus
+  `list_targets`, `start_watch`, `stop_watch`, `watch_status`. Targets:
+  `"all"` | `"display:<id>"` | `"app:<name>"` | `"window:<id>"`.
+
+  MCP runs over the `seen` CLI (`seen mcp` is a stdio shim over the socket), so
+  the CLI must be on PATH for any of this to work.
+
+  - **Claude Code:** `claude mcp add seen -- seen mcp`
+  - **Cursor:** no CLI equivalent — write `~/.cursor/mcp.json` (global) or
+    `.cursor/mcp.json` (project):
+    ```json
+    {
+      "mcpServers": {
+        "seen": { "command": "seen", "args": ["mcp"] }
+      }
+    }
+    ```
+    Manage it afterwards with `agent mcp list` / `list-tools seen`.
+- **Raw HTTP** over the socket — the only door that needs nothing installed
+  beyond the running app (no CLI, no MCP registration):
   ```bash
   curl -s --unix-socket ~/Library/Application\ Support/Seen/seen.sock \
        -d '{"target":{"app":"Teams"},"output":"both"}' http://seen/capture
