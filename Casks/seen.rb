@@ -1,6 +1,6 @@
 cask "seen" do
-  version "0.1.2"
-  sha256 "b06f40b81cd8a61761d0ad3cc23e4a214a59c74baf35b1aa8b5acc2710fdb781"
+  version "0.1.3"
+  sha256 "342a5d1c10a44d94a0a98ee0ab4ed1a6dbd16a002414d31b88018029575fb981"
 
   url "https://github.com/execsumo/seen/releases/download/v#{version}/Seen-#{version}.dmg"
   name "Seen"
