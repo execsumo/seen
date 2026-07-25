@@ -247,30 +247,24 @@ struct Setup: AsyncParsableCommand {
     struct Claude: AsyncParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Setup Seen for Claude.")
         mutating func run() async throws {
-            guard let pathEnv = ProcessInfo.processInfo.environment["PATH"] else {
-                print("claude not found on PATH. Run this command manually:\n  claude mcp add seen -- seen mcp")
-                throw ExitCode.failure
+            let pathEnv = ProcessInfo.processInfo.environment["PATH"]
+            
+            let execPath = SetupClaude.resolveExecutable(pathEnv: pathEnv) { path in
+                FileManager.default.isExecutableFile(atPath: path)
             }
-            let paths = pathEnv.split(separator: ":").map { String($0) }
-            var claudePath: String? = nil
-            for p in paths {
-                let u = URL(fileURLWithPath: p).appendingPathComponent("claude")
-                if FileManager.default.isExecutableFile(atPath: u.path) {
-                    claudePath = u.path
-                    break
-                }
-            }
-            guard let execPath = claudePath else {
+            
+            guard let execPath = execPath else {
                 print("claude not found on PATH. Run this command manually:\n  claude mcp add seen -- seen mcp")
                 throw ExitCode.failure
             }
             
             let p = Process()
             p.executableURL = URL(fileURLWithPath: execPath)
-            p.arguments = ["mcp", "add", "seen", "--", "seen", "mcp"]
+            p.arguments = SetupClaude.arguments
             try p.run()
             p.waitUntilExit()
             if p.terminationStatus != 0 {
+                print("claude mcp add exited with status \(p.terminationStatus) (see its output above).")
                 throw ExitCode(p.terminationStatus)
             }
         }

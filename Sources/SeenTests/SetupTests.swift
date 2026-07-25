@@ -176,5 +176,25 @@ let setupTests: [TestCase] = [
         // Test resolution using symlink
         let resolved = try SetupSkill.resolveSourcePath(executableURL: symlinkURL)
         try expectEqual(resolved.path, bundleSkillURL.path)
+    },
+    
+    TestCase("setup claude: resolveExecutable finds first match") {
+        let pathEnv = "/usr/bin:/opt/homebrew/bin:/usr/local/bin"
+        
+        let exec = SetupClaude.resolveExecutable(pathEnv: pathEnv) { path in
+            return path == "/opt/homebrew/bin/claude"
+        }
+        
+        try expectEqual(exec, "/opt/homebrew/bin/claude")
+    },
+    
+    TestCase("setup claude: resolveExecutable returns nil for nil or empty or none executable") {
+        try expectEqual(SetupClaude.resolveExecutable(pathEnv: nil, isExecutable: { _ in true }), nil)
+        try expectEqual(SetupClaude.resolveExecutable(pathEnv: "", isExecutable: { _ in true }), nil)
+        try expectEqual(SetupClaude.resolveExecutable(pathEnv: "/usr/bin", isExecutable: { _ in false }), nil)
+    },
+    
+    TestCase("setup claude: arguments match spec") {
+        try expectEqual(SetupClaude.arguments, ["mcp", "add", "seen", "--", "seen", "mcp"])
     }
 ]
