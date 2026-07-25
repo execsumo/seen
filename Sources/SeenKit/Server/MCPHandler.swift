@@ -2,7 +2,25 @@ import Foundation
 
 public struct MCPHandler {
     public let client: any SeenAPIClient
-    
+
+    /// Versions this shim will answer to, oldest first. The list is broad
+    /// because nothing here varies by version — same tools, same result shapes.
+    /// A future version that *does* change behavior needs a branch in the
+    /// handler, not just another entry.
+    public static let supportedProtocolVersions = ["2024-11-05", "2025-03-26", "2025-06-18"]
+
+    public static var latestProtocolVersion: String { supportedProtocolVersions.last! }
+
+    /// MCP requires the server to echo the requested version when it supports
+    /// it, and otherwise answer with one it does support. Echoing blindly would
+    /// claim support for versions we've never heard of, so this is an allowlist.
+    public static func negotiateProtocolVersion(requested: String?) -> String {
+        guard let requested, supportedProtocolVersions.contains(requested) else {
+            return latestProtocolVersion
+        }
+        return requested
+    }
+
     public init(client: any SeenAPIClient) {
         self.client = client
     }
@@ -23,8 +41,10 @@ public struct MCPHandler {
             let method = dict["method"] as? String ?? ""
             
             if method == "initialize" {
+                let params = dict["params"] as? [String: Any] ?? [:]
+                let requested = params["protocolVersion"] as? String
                 let result: [String: Any] = [
-                    "protocolVersion": "2025-06-18",
+                    "protocolVersion": Self.negotiateProtocolVersion(requested: requested),
                     "capabilities": ["tools": [String: Any]()],
                     "serverInfo": ["name": "seen", "version": Seen.version]
                 ]

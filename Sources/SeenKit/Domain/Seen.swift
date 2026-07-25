@@ -2,7 +2,12 @@ import Foundation
 
 /// Global constants for the Seen package.
 public enum Seen {
-    public static let version = "0.1.0"
+    /// Reported by `GET /health` and MCP `initialize` (`serverInfo.version`).
+    /// Hand-maintained: nothing derives it from the git tag or the bundle's
+    /// CFBundleShortVersionString, so it must be bumped as part of cutting a
+    /// release or the wire surface reports a stale version. It sat at "0.1.0"
+    /// through v0.1.1 and v0.1.2 for exactly that reason.
+    public static let version = "0.1.3"
 }
 
 /// Well-known filesystem locations shared by the app, the CLI, and the MCP shim.

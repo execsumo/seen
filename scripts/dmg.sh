@@ -3,7 +3,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SIGN_IDENTITY=""
-NOTARY_PROFILE="heard-notary"
+NOTARY_PROFILE="seen-notary"
 API_KEY_PATH=""
 API_KEY_ID=""
 API_ISSUER_ID=""

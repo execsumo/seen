@@ -191,6 +191,34 @@ let apiTests: [TestCase] = [
         try expect(listRes.contains("start_watch"))
     }),
     
+    TestCase("MCPHandler - initialize echoes a supported protocol version", {
+        let handler = MCPHandler(client: MockAPIClient())
+        // The client asked for an older spec revision we do support; the MCP
+        // spec requires echoing it back rather than answering with our latest.
+        for version in MCPHandler.supportedProtocolVersions {
+            let req = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"\(version)\"}}".data(using: .utf8)!
+            let res = String(data: await handler.handle(req)!, encoding: .utf8)!
+            try expect(res.contains("\"protocolVersion\":\"\(version)\""))
+        }
+    }),
+
+    TestCase("MCPHandler - initialize falls back to latest for unknown or missing version", {
+        let handler = MCPHandler(client: MockAPIClient())
+        let latest = MCPHandler.latestProtocolVersion
+
+        let unknown = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"1999-01-01\"}}".data(using: .utf8)!
+        let unknownRes = String(data: await handler.handle(unknown)!, encoding: .utf8)!
+        try expect(unknownRes.contains("\"protocolVersion\":\"\(latest)\""))
+
+        // No params at all — the shape the CLI's own smoke test sends.
+        let missing = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}".data(using: .utf8)!
+        let missingRes = String(data: await handler.handle(missing)!, encoding: .utf8)!
+        try expect(missingRes.contains("\"protocolVersion\":\"\(latest)\""))
+
+        try expectEqual(MCPHandler.negotiateProtocolVersion(requested: nil), latest)
+        try expectEqual(MCPHandler.negotiateProtocolVersion(requested: "2024-11-05"), "2024-11-05")
+    }),
+
     TestCase("MCPHandler - capture_screen", {
         let client = MockAPIClient()
         let handler = MCPHandler(client: client)

@@ -2,17 +2,56 @@
 
 _Last updated: 2026-07-25. Read this before making changes._
 
-## Status: v0.1.0 — **shipped** 2026-07-25
+## Status: v0.1.3 — cutting 2026-07-25
 
-Notarized DMG published, Homebrew cask live in `execsumo/homebrew-tap`,
-`brew install --cask seen` resolves. The README's install instructions are now
-true. See "Release status" below for what the first real release proved.
+Contains the `seen setup` command group, the quit-and-reopen permission flow,
+and MCP protocol-version negotiation. 59/59 tests, zero warnings.
 
-**Unreleased work sitting on `main` (2026-07-25, not pushed, no tag):** all three
-setup-friction fixes — the `seen setup` command group and the quit-and-reopen
-permission flow. 57/57 tests, zero warnings. **One gate before any release: walk a
-real Screen Recording revoke/grant cycle** (see "Setup friction" → #1 → "Where
-this stands"). Everything else in that work is verified.
+**The Screen Recording gate is closed** — a real grant cycle was walked
+2026-07-25 and the relaunch behaved. See "TCC walkthrough result" below.
+
+### 2026-07-25 MCP protocol version is negotiated, not hardcoded
+
+`initialize` used to answer `"2025-06-18"` unconditionally, whatever the client
+asked for. Per the MCP spec that reads as *"I do not support your version"*, and
+a strict client is entitled to disconnect — it was answering `2025-06-18` to a
+`2024-11-05` request. Now `MCPHandler.negotiateProtocolVersion` echoes the
+requested version when it's in `supportedProtocolVersions`
+(`2024-11-05` / `2025-03-26` / `2025-06-18`) and falls back to the latest when
+the request is unknown or omits the field.
+
+**It's an allowlist, not an echo** — echoing whatever arrives would claim
+support for versions that don't exist. The list is wide only because nothing in
+the handler varies by version; a version that *does* change behavior needs a
+branch here, not another array entry. Verified live over stdio for all three
+supported versions plus an unknown one and a no-params request.
+
+**`Seen.version` is hand-maintained and was stale.** It sat at `"0.1.0"` through
+v0.1.1 and v0.1.2, so `GET /health` and MCP `serverInfo.version` reported 0.1.0
+from every build. Nothing derives it from the git tag or the bundle version —
+**bump `Sources/SeenKit/Domain/Seen.swift` as part of cutting a release.**
+
+### 2026-07-25 TCC walkthrough result — the gate is closed
+
+The revoke/grant cycle was finally walked against a `bundle.sh` install
+(0.1.3-dev, Dev Cert). Both failure modes the design worried about were checked
+and neither occurred:
+- **Not "app not running":** PID went 248 → 291 across the relaunch.
+- **Not "two live instances":** `pgrep -fl Seen` returned exactly one, and
+  `seen health` answered on the UDS — so no stale-socket theft.
+- `screenRecordingPermission` flipped to `true` after the grant.
+- `LSUIElement` did not interfere with the relaunch.
+
+**Then the MCP path was exercised end to end for the first time**, driving the
+real stdio transport with JSON-RPC (`initialize` → `tools/list` →
+`tools/call capture_screen`): a valid **1568×1020 PNG** came back in an `image`
+block and rendered inline in an agent session, with the OCR text and saved path
+in the companion `text` block. 1568 confirms the agent default applies and
+`HumanCapture`'s 2048 policy is not leaking into the agent path.
+
+Note the signing identity changed ad-hoc → Dev Cert on that install, which is
+why the grant reset. A Homebrew install is Developer ID signed, so it resets
+once more — that is expected, not a regression.
 
 ### 2026-07-25 v0.1.1 was broken on arrival — fixed in v0.1.2
 **v0.1.1's app bundle could not launch.** macOS filesystems are
@@ -207,12 +246,16 @@ paths.
 
 ## Not yet verified (needs the app running with permission granted)
 
-1. Real ScreenCaptureKit captures (all-displays, app-target, window-target).
-2. The permission onboarding flow and deep links.
+1. ~~Real ScreenCaptureKit captures~~ — **all-displays verified 2026-07-25** via
+   the MCP walkthrough. App-target and window-target still unverified.
+2. ~~The permission onboarding flow~~ — **verified 2026-07-25** (see "TCC
+   walkthrough result"). Deep links still unverified.
 3. Hotkey → push pipeline end-to-end (command template / tmux / clipboard).
 4. Menu bar icon state transitions driven by real events.
-5. MCP registered in a real agent (`claude mcp add seen -- seen mcp`) —
-   inline image blocks rendering in an actual session.
+5. ~~MCP inline image blocks rendering in an actual session~~ — **verified
+   2026-07-25** by driving `seen mcp` over stdio. The one step not exercised is
+   `claude mcp add seen -- seen mcp` registration itself; everything downstream
+   of it is confirmed.
 6. WebP encoding on this OS version (test asserts encode-or-clean-error).
 
 ### 2026-07-25 Human captures get 2K; harness formats now tracked with dates
@@ -481,11 +524,22 @@ skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
 ## Known rough edges / next work
 
 - ~~**Ship v0.1.0**~~ — done 2026-07-25; see "Release status" above.
-- **`scripts/dmg.sh:6` defaults `NOTARY_PROFILE="heard-notary"`** — a leftover
-  from the Heard project. Harmless on the CI path (the workflow passes
-  `--api-key-path`, so `NOTARY_AUTH` takes the API-key branch), but a *local*
-  `dmg.sh` run without `--api-key-path` reaches for a keychain profile named
-  after a different app. Rename when convenient.
+- ~~**`scripts/dmg.sh:6` defaults `NOTARY_PROFILE="heard-notary"`**~~ — fixed
+  2026-07-25; the default is now `seen-notary`. Only ever reached by a *local*
+  `dmg.sh` run without `--api-key-path` (CI passes the API key, so `NOTARY_AUTH`
+  takes the other branch). Note the rename doesn't create the profile: a local
+  notarizing run needs `xcrun notarytool store-credentials seen-notary` first.
+- **`bundle.sh:134`'s Developer ID auto-detect is dead code.** It greps for
+  `'"Developer ID Application: Herwin Gill"'`, but `security find-identity`
+  prints `"Developer ID Application: Herwin Gill (577WHA43TF)"` — the closing
+  quote can't match, so the branch never fires and auto-detect always falls
+  through to `Dev Cert`. Harmless for releases (the workflow passes `--sign`
+  explicitly) but the fallback doesn't do what it claims. **Fixing it flips the
+  local signing identity, which resets the Screen Recording grant** — do it
+  deliberately, not in the middle of a TCC walkthrough.
+- **`Seen.version` is hand-maintained** (`Sources/SeenKit/Domain/Seen.swift`) —
+  bump it when cutting a release or `/health` and MCP `serverInfo` report a
+  stale version, as they did through v0.1.1 and v0.1.2.
 - **CLI human output** prints Swift struct dumps for `health`/`targets`/`watch
   list` instead of formatted text (see `SeenCommand.swift`) — functional, ugly.
 - **Loopback TCP escape hatch** (Settings → Agent Access) is specced in

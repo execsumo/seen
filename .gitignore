@@ -3,3 +3,5 @@
 *.xcodeproj
 .swiftpm/
 .delegate/
+build/
+dist/

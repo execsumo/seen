@@ -91,6 +91,20 @@ max duration 30 min, ≤2 concurrent, ≤200 captures/session — compiled-in ca
 ## MCP tools (`seen mcp`)
 
 stdio JSON-RPC shim proxying to this API; one JSON-RPC message per line.
+
+### Protocol version negotiation
+
+`initialize` echoes the client's requested `protocolVersion` when it is one the
+shim supports — `2024-11-05`, `2025-03-26`, `2025-06-18` — as the MCP spec
+requires. If the request asks for an unsupported version, or omits
+`protocolVersion` entirely, the shim replies with its latest (`2025-06-18`) and
+the client decides whether to proceed.
+
+The supported list is broad because the shim's behavior does not vary by
+version: the tool set and result shapes are identical across all three. Adding
+a version that *does* change behavior means branching here, not just widening
+the list.
+
 Tools:
 
 | tool | maps to | notes |
