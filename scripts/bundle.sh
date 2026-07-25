@@ -29,12 +29,16 @@ INSTALLED="/Applications/$APP_NAME.app"
 # The `seen` CLI is built and embedded alongside the app, not just the app
 # itself: `seen mcp` is the MCP transport, so an install without the CLI cannot
 # serve agents at all. The cask's `binary` stanza symlinks it onto PATH.
+# Two invocations, not `--product A --product B`: SwiftPM's --product is
+# last-wins, so passing it twice silently builds only the second product.
 echo "==> Building $APP_NAME ($BUILD_CONFIG)..."
 if [[ "$BUILD_CONFIG" == "release" ]]; then
-    swift build -c release --product SeenApp --product seen --package-path "$REPO_ROOT"
+    swift build -c release --product SeenApp --package-path "$REPO_ROOT"
+    swift build -c release --product seen    --package-path "$REPO_ROOT"
     BUILD_BIN_DIR="$REPO_ROOT/.build/release"
 else
-    swift build --product SeenApp --product seen --package-path "$REPO_ROOT"
+    swift build --product SeenApp --package-path "$REPO_ROOT"
+    swift build --product seen    --package-path "$REPO_ROOT"
     BUILD_BIN_DIR="$REPO_ROOT/.build/debug"
 fi
 BINARY="$BUILD_BIN_DIR/SeenApp"

@@ -55,7 +55,6 @@ do other work, then read the new `capture_*` files after `endsAt`.
       }
     }
     ```
-    Manage it afterwards with `agent mcp list` / `list-tools seen`.
 - **Raw HTTP** over the socket — the only door that needs nothing installed
   beyond the running app (no CLI, no MCP registration):
   ```bash

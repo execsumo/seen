@@ -36,6 +36,20 @@ deleted "Agent Access" pane and the `Copy “claude mcp add” command` menu row
 Check `ls -l /Applications/Seen.app/Contents/MacOS/` against `git log` before
 concluding the app disagrees with the code.
 
+**Before installing v0.1.1 via brew, delete any hand-copied `seen` on PATH**
+(`rm /opt/homebrew/bin/seen` or `/usr/local/bin/seen`). The old README told
+people to `cp .build/debug/seen /usr/local/bin/`, and Homebrew refuses to
+overwrite a non-cask file at the path its `binary` stanza wants to symlink —
+the install aborts, and it looks like the cask is broken rather than a local
+leftover.
+
+Also note `bundle.sh` builds the two products in **separate** `swift build`
+invocations: SwiftPM's `--product` is last-wins, so
+`--product SeenApp --product seen` silently builds only `seen` and the script
+then fails its own missing-binary guard. Nothing in CI would catch that —
+`ci.yml` runs a plain `swift build` (all products) and no workflow exercises
+`bundle.sh` until a tag triggers `dmg.sh`.
+
 ### 2026-07-25 CI added; release gated on it
 - **`.github/workflows/ci.yml`** (new) — `swift build` + `swift run SeenTests`
   on every push/PR to `main`, macos-15. Everything in the suite is headless
