@@ -2,13 +2,36 @@
 
 _Last updated: 2026-07-25. Read this before making changes._
 
-## Status: v0.1.3 — cutting 2026-07-25
+## Status: v0.1.3 — **shipped** 2026-07-25 (run `30174165770`)
 
 Contains the `seen setup` command group, the quit-and-reopen permission flow,
 and MCP protocol-version negotiation. 59/59 tests, zero warnings.
 
 **The Screen Recording gate is closed** — a real grant cycle was walked
 2026-07-25 and the relaunch behaved. See "TCC walkthrough result" below.
+
+### Release status — v0.1.3
+
+Verified independently after the run, not taken on trust:
+- Run `30174165770`: `test / build-and-test` **success** → `release` **success**.
+- Release `v0.1.3` published, asset `Seen-0.1.3.dmg` (1,279,181 bytes).
+- DMG sha256 `342a5d1c…b981` identical across three places: the downloaded
+  asset, `Casks/seen.rb` on `main` (bot commit `3a93234`), and the tap.
+- `xcrun stapler validate` passes on **both** the DMG and the app inside it;
+  `spctl --type open` (DMG) and `--type execute` (app) both
+  `accepted, source=Notarized Developer ID`;
+  `Authority=Developer ID Application: Herwin Gill (577WHA43TF)`.
+- Shipped bundle checked against the v0.1.1 lesson: `CFBundleShortVersionString`
+  0.1.3, SwiftUI discriminator **1 for the app / 0 for the CLI** (so the two
+  executables are distinct — no overwrite), `SKILL.md` present in
+  `Contents/Resources/seen-skill/`.
+- `brew info --cask execsumo/tap/seen` → 0.1.3.
+
+**This run also proved the `build/` untracking is safe.** `be9baee` removed
+`build/Seen.app` from git (it had been committed by accident in `a31e99c`), and
+the release went green afterwards — `bundle.sh` recreates the directory, so the
+workflow never depended on the tracked artifacts. That was the riskiest part of
+the commit and it is now empirically settled.
 
 ### 2026-07-25 MCP protocol version is negotiated, not hardcoded
 
