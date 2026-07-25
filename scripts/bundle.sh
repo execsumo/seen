@@ -83,6 +83,15 @@ if ! cmp -s "$CLI_BINARY" "$APP_BUNDLE/Contents/Resources/bin/seen"; then
     exit 1
 fi
 
+mkdir -p "$APP_BUNDLE/Contents/Resources/seen-skill"
+cp "$REPO_ROOT/.claude/skills/seen/SKILL.md" "$APP_BUNDLE/Contents/Resources/seen-skill/SKILL.md"
+
+if ! cmp -s "$REPO_ROOT/.claude/skills/seen/SKILL.md" "$APP_BUNDLE/Contents/Resources/seen-skill/SKILL.md"; then
+    echo "ERROR: $APP_BUNDLE/Contents/Resources/seen-skill/SKILL.md is not the correct skill file."
+    exit 1
+fi
+
+
 # Create Info.plist dynamically with LSUIElement true
 cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
