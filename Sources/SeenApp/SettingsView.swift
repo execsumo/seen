@@ -327,6 +327,11 @@ private struct DestinationPane: View {
 
 private struct PermissionsPane: View {
     @EnvironmentObject var composition: Composition
+    @State private var didTapRestart = false
+    @State private var relaunchFailed = false
+    
+    private var phase: PermissionPhase { composition.appState.permissionPhase }
+    private var granted: Bool { phase == .granted }
 
     var body: some View {
         Pane("Permissions", subtitle: "Seen needs one permission — Screen Recording — to see anything.") {
@@ -354,15 +359,28 @@ private struct PermissionsPane: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 6) {
-                            StatusPill(text: granted ? "Granted" : "Not granted",
+                            StatusPill(text: phase == .granted ? "Granted" : (phase == .requestedPendingRestart ? "Restart Needed" : "Not granted"),
                                        fg: granted ? SeenTheme.Paper.good : SeenTheme.Paper.bad,
                                        bg: granted ? SeenTheme.Paper.goodSoft : SeenTheme.Paper.badSoft)
                             if !granted {
-                                Button("Grant…") {
-                                    _ = CGRequestScreenCaptureAccess()
-                                    composition.appState.recheckPermission()
+                                if phase == .requestedPendingRestart {
+                                    Button(didTapRestart ? "Restarting…" : "Quit and Reopen Seen") {
+                                        didTapRestart = true
+                                        relaunchFailed = false
+                                        RelaunchHelper.relaunch {
+                                            didTapRestart = false
+                                            relaunchFailed = true
+                                        }
+                                    }
+                                    .buttonStyle(PaperPrimaryButtonStyle())
+                                    .disabled(didTapRestart)
+                                } else {
+                                    Button("Grant…") {
+                                        _ = CGRequestScreenCaptureAccess()
+                                        composition.appState.markPermissionRequested()
+                                    }
+                                    .buttonStyle(PaperSecondaryButtonStyle())
                                 }
-                                .buttonStyle(PaperSecondaryButtonStyle())
                             }
                         }
                     }
@@ -371,18 +389,29 @@ private struct PermissionsPane: View {
 
             if !granted {
                 Button("Open System Settings → Screen Recording") {
+                    composition.appState.markPermissionRequested()
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
                         NSWorkspace.shared.open(url)
                     }
                 }
                 .buttonStyle(PaperSecondaryButtonStyle())
                 .fixedSize()
+                
+                if phase == .requestedPendingRestart {
+                    Text("If you've already allowed Seen in System Settings, it needs to restart before it can see your screen.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SeenTheme.Paper.mute)
+                }
+
+                if relaunchFailed {
+                    Text("Couldn't restart automatically — please quit Seen and open it again.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SeenTheme.Paper.bad)
+                }
             }
         }
         .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
             composition.appState.recheckPermission()
         }
     }
-
-    private var granted: Bool { composition.appState.hasPermission }
 }

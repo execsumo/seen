@@ -6,3 +6,4 @@ let allTests: [TestCase] =
     + shellTests
     + apiTests
     + setupTests
+    + permissionPhaseTests
