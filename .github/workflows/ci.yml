@@ -2,6 +2,10 @@ name: CI
 
 # Note: GitHub Actions does not support YAML anchors/aliases, so the
 # paths-ignore list is spelled out for each trigger. Keep the two in sync.
+#
+# Gotcha: GitHub honors the skip-CI token anywhere in a commit message,
+# including the body. A commit that merely *mentions* it in prose will skip
+# its own run — spell it defensively when writing about it.
 on:
   push:
     branches: ['main']
