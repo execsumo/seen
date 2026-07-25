@@ -148,5 +148,33 @@ let setupTests: [TestCase] = [
         let exeURL = buildDir.appendingPathComponent("seen")
         
         _ = try await expectThrows { _ = try SetupSkill.resolveSourcePath(executableURL: exeURL) }
+    },
+    
+    TestCase("setup skill: resolution resolves symlinks before searching") {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? fm.removeItem(at: dir) }
+        
+        // Setup actual binary location
+        let realDir = dir.appendingPathComponent("real/Seen.app/Contents/Resources/bin")
+        try fm.createDirectory(at: realDir, withIntermediateDirectories: true)
+        let realExeURL = realDir.appendingPathComponent("seen")
+        try "dummy".data(using: .utf8)!.write(to: realExeURL)
+        
+        // Setup SKILL.md relative to real location
+        let bundleSkillDir = dir.appendingPathComponent("real/Seen.app/Contents/Resources/seen-skill")
+        try fm.createDirectory(at: bundleSkillDir, withIntermediateDirectories: true)
+        let bundleSkillURL = bundleSkillDir.appendingPathComponent("SKILL.md")
+        try "bundle".data(using: .utf8)!.write(to: bundleSkillURL)
+        
+        // Create symlink
+        let symlinkDir = dir.appendingPathComponent("symlink")
+        try fm.createDirectory(at: symlinkDir, withIntermediateDirectories: true)
+        let symlinkURL = symlinkDir.appendingPathComponent("seen")
+        try fm.createSymbolicLink(at: symlinkURL, withDestinationURL: realExeURL)
+        
+        // Test resolution using symlink
+        let resolved = try SetupSkill.resolveSourcePath(executableURL: symlinkURL)
+        try expectEqual(resolved.path, bundleSkillURL.path)
     }
 ]

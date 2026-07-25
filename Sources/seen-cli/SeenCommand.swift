@@ -315,7 +315,7 @@ struct Setup: AsyncParsableCommand {
         @Flag(name: .long) var yes = false
         
         mutating func run() async throws {
-            let exeURL = URL(fileURLWithPath: CommandLine.arguments[0])
+            let exeURL = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
             let sourceURL: URL
             do {
                 sourceURL = try SetupSkill.resolveSourcePath(executableURL: exeURL)
