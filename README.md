@@ -46,13 +46,15 @@ Now ask Claude Code *"what's on my screen right now?"* — that's it.
 <details>
 <summary><b>Cursor, Codex, and other agents</b></summary>
 
-For Cursor, run:
+Cursor has no `mcp add` command, so Seen writes the config for you:
 
 ```bash
-seen setup cursor
+seen setup cursor          # ~/.cursor/mcp.json (all projects)
+seen setup cursor --project  # .cursor/mcp.json (this project)
 ```
 
-As a fallback for Cursor, or for other agents that need manual configuration, you can add this to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in your project):
+It merges into your existing config and leaves your other MCP servers alone.
+Restart Cursor afterwards. To do it by hand instead:
 
 ```json
 {
@@ -70,13 +72,14 @@ command is `seen`, the argument is `mcp`.
 <summary><b>Give Claude Code deeper instructions (optional)</b></summary>
 
 The repo ships an agent skill that teaches Claude Code when to look at your
-screen and how to choose between OCR text and images. Install it interactively by running:
+screen and how to choose between OCR text and images:
 
 ```bash
 seen setup skill
 ```
 
-Alternatively, you can manually download the file as a fallback:
+It asks where to put it — for all your projects (`~/.claude/skills`) or just
+this one. Add `--yes` to skip the question. To do it by hand instead:
 
 ```bash
 mkdir -p ~/.claude/skills/seen
