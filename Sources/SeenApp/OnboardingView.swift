@@ -1,12 +1,16 @@
 import SwiftUI
 import AppKit
+import SeenKit
 
 public struct OnboardingView: View {
     @EnvironmentObject var composition: Composition
 
     public init() {}
 
-    private var granted: Bool { composition.appState.hasPermission }
+    @State private var didTapRestart = false
+
+    private var phase: PermissionPhase { composition.appState.permissionPhase }
+    private var granted: Bool { phase == .granted }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -55,19 +59,31 @@ public struct OnboardingView: View {
                                     .foregroundStyle(SeenTheme.Paper.mute)
                             }
                             Spacer()
-                            StatusPill(text: granted ? "Granted" : "Needed",
+                            StatusPill(text: phase == .granted ? "Granted" : (phase == .requestedPendingRestart ? "Restart Needed" : "Needed"),
                                        fg: granted ? SeenTheme.Paper.good : SeenTheme.Paper.bad,
                                        bg: granted ? SeenTheme.Paper.goodSoft : SeenTheme.Paper.badSoft)
                         }
                     }
                 }
 
-                if granted {
+                if phase == .granted {
                     Text("You can close this window — Seen lives in your menu bar.")
                         .font(.system(size: 11))
                         .foregroundStyle(SeenTheme.Paper.mute)
                         .frame(maxWidth: .infinity, alignment: .center)
+                } else if phase == .requestedPendingRestart {
+                    Text("macOS needs Seen to restart before it can see your screen.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SeenTheme.Paper.mute)
+                        .frame(maxWidth: .infinity, alignment: .center)
                 } else {
+                    Text("Seen needs permission to work. You can always change this in System Settings.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SeenTheme.Paper.mute)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+                
+                if !granted {
                     HStack(spacing: 10) {
                         Button("Open System Settings") {
                             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
@@ -77,11 +93,22 @@ public struct OnboardingView: View {
                         .buttonStyle(PaperSecondaryButtonStyle())
                         .fixedSize()
 
-                        Button("Grant Permission") {
-                            _ = CGRequestScreenCaptureAccess()
-                            composition.appState.recheckPermission()
+                        if phase == .requestedPendingRestart {
+                            Button(didTapRestart ? "Restarting…" : "Quit and Reopen Seen") {
+                                didTapRestart = true
+                                RelaunchHelper.relaunch {
+                                    didTapRestart = false
+                                }
+                            }
+                            .buttonStyle(PaperPrimaryButtonStyle())
+                            .disabled(didTapRestart)
+                        } else {
+                            Button("Grant Permission") {
+                                _ = CGRequestScreenCaptureAccess()
+                                composition.appState.markPermissionRequested()
+                            }
+                            .buttonStyle(PaperPrimaryButtonStyle())
                         }
-                        .buttonStyle(PaperPrimaryButtonStyle())
                     }
                 }
                 Spacer()

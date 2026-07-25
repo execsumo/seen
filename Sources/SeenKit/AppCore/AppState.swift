@@ -17,13 +17,17 @@ public final class AppState {
     public var sessionInfos: [SessionInfo] = []
     public var activeSessions: Int { sessionInfos.count }
     public var hasPermission: Bool = false
+    public var permissionPhase: PermissionPhase = .needed
     public var serverStatus: ServerStatus = .starting
+    private var permissionRequestedAt: Date?
+
 
     private let coordinator: any CaptureCoordinating
     
     public init(coordinator: any CaptureCoordinating) {
         self.coordinator = coordinator
         self.hasPermission = CGPreflightScreenCaptureAccess()
+        self.permissionPhase = resolvePermissionPhase(granted: self.hasPermission, requestedAt: nil, now: Date())
         
         Task {
             await coordinator.observeEvents { [weak self] event in
@@ -46,7 +50,13 @@ public final class AppState {
         }
     }
     
-    public func recheckPermission() {
+    public func markPermissionRequested(now: Date = Date()) {
+        self.permissionRequestedAt = now
+        recheckPermission(now: now)
+    }
+    
+    public func recheckPermission(now: Date = Date()) {
         self.hasPermission = CGPreflightScreenCaptureAccess()
+        self.permissionPhase = resolvePermissionPhase(granted: self.hasPermission, requestedAt: self.permissionRequestedAt, now: now)
     }
 }

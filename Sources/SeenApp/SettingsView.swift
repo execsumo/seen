@@ -327,6 +327,10 @@ private struct DestinationPane: View {
 
 private struct PermissionsPane: View {
     @EnvironmentObject var composition: Composition
+    @State private var didTapRestart = false
+    
+    private var phase: PermissionPhase { composition.appState.permissionPhase }
+    private var granted: Bool { phase == .granted }
 
     var body: some View {
         Pane("Permissions", subtitle: "Seen needs one permission — Screen Recording — to see anything.") {
@@ -354,15 +358,26 @@ private struct PermissionsPane: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 6) {
-                            StatusPill(text: granted ? "Granted" : "Not granted",
+                            StatusPill(text: phase == .granted ? "Granted" : (phase == .requestedPendingRestart ? "Restart Needed" : "Not granted"),
                                        fg: granted ? SeenTheme.Paper.good : SeenTheme.Paper.bad,
                                        bg: granted ? SeenTheme.Paper.goodSoft : SeenTheme.Paper.badSoft)
                             if !granted {
-                                Button("Grant…") {
-                                    _ = CGRequestScreenCaptureAccess()
-                                    composition.appState.recheckPermission()
+                                if phase == .requestedPendingRestart {
+                                    Button(didTapRestart ? "Restarting…" : "Quit and Reopen Seen") {
+                                        didTapRestart = true
+                                        RelaunchHelper.relaunch {
+                                            didTapRestart = false
+                                        }
+                                    }
+                                    .buttonStyle(PaperPrimaryButtonStyle())
+                                    .disabled(didTapRestart)
+                                } else {
+                                    Button("Grant…") {
+                                        _ = CGRequestScreenCaptureAccess()
+                                        composition.appState.markPermissionRequested()
+                                    }
+                                    .buttonStyle(PaperSecondaryButtonStyle())
                                 }
-                                .buttonStyle(PaperSecondaryButtonStyle())
                             }
                         }
                     }
@@ -377,12 +392,16 @@ private struct PermissionsPane: View {
                 }
                 .buttonStyle(PaperSecondaryButtonStyle())
                 .fixedSize()
+                
+                if phase == .requestedPendingRestart {
+                    Text("macOS needs Seen to restart before it can see your screen.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SeenTheme.Paper.mute)
+                }
             }
         }
         .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
             composition.appState.recheckPermission()
         }
     }
-
-    private var granted: Bool { composition.appState.hasPermission }
 }
