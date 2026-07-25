@@ -7,13 +7,15 @@ description: See the user's screen via the Seen daemon — take screenshots and 
 
 Seen is a menu bar daemon (`/Applications/Seen.app`) exposing screen capture +
 Vision OCR over a local Unix socket. Every capture is also saved to disk
-(default `~/Library/Application Support/Seen/Captures/capture_<date>_<time>_<source>.png`,
-≤1568 px on the longest edge for captures you request; user-configurable in
-Settings). PNG is the
-default because it keeps on-screen text sharp for vision at no extra token
-cost — Claude bills images by dimensions, not bytes. Request `format: "jpeg"`
-per capture if you want a smaller payload. Query `seen open` or `/config`'s
-`saveDirectoryPath` for the live location.
+(default `~/Library/Application Support/Seen/Captures/capture_<date>_<time>_<source>.png`;
+directory is user-configurable — query `seen open` or `/config`'s
+`saveDirectoryPath` for the live location).
+
+Captures **you** request are PNG at ≤1568 px on the longest edge. PNG because it
+keeps on-screen text sharp at no extra token cost — Claude bills images by
+dimensions, not bytes. Request `format: "jpeg"` for a smaller payload. Captures
+the *user* triggers with the hotkey are capped at 2048 px instead, so files on
+disk vary in size; that's expected, not a bug.
 
 ## Quick recipes (CLI — always available as `seen`)
 
@@ -62,8 +64,8 @@ do other work, then read the new `capture_*` files after `endsAt`.
   curl -s --unix-socket ~/Library/Application\ Support/Seen/seen.sock \
        -d '{"target":{"app":"Teams"},"output":"both"}' http://seen/capture
   ```
-  Endpoints: /health /config /displays /apps /capture /sessions. Contract:
-  `docs/api.md` in the seen repo (`~/projects/seen`).
+  Endpoints: /health /config /displays /apps /capture /sessions. Normative
+  contract: https://github.com/execsumo/seen/blob/main/docs/api.md
 
 ## Limits & errors
 
@@ -75,6 +77,8 @@ do other work, then read the new `capture_*` files after `endsAt`.
 - Connection refused / no socket → the app isn't running: `open -a Seen`,
   then retry `seen health`.
 - `target_not_found` → run `seen targets` and use an exact name from it.
+- `unsupported_format` → only `png` and `jpeg` encode. `webp` exists in the API
+  enum but macOS ships no WebP encoder, so it always fails; don't retry it.
 
 ## Judgment
 
@@ -82,5 +86,11 @@ do other work, then read the new `capture_*` files after `endsAt`.
   images, less noise, and it avoids capturing unrelated sensitive content.
 - Prefer `--ocr-only` when text answers the question; read the image only when
   layout/visuals matter.
+- **Don't raise `max_dimension` to see small text.** It won't help: Anthropic
+  resizes anything larger server-side, so a bigger image costs more tokens for
+  the same rendered detail. OCR already ran on the *full-resolution* frame
+  before downscaling, so the text you couldn't read in the image is already in
+  `items[].text` — read that instead. Lower `max_dimension` when you want a
+  cheaper look; leave it alone otherwise.
 - Screenshots may contain sensitive content: don't paste OCR dumps or upload
   captures anywhere external without the user asking.
