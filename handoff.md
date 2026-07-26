@@ -2,21 +2,33 @@
 
 _Last updated: 2026-07-25. Read this before making changes._
 
-## Status: v0.1.3 — **shipped** 2026-07-25 (run `30174165770`)
+## Status: v0.1.3 — **shipped** 2026-07-25, **re-cut** 2026-07-26 (run `30183743760`)
 
-Contains the `seen setup` command group, the quit-and-reopen permission flow,
-and MCP protocol-version negotiation. 59/59 tests, zero warnings.
+Contains the `seen setup` command group — reorganised by harness, covering
+Claude Code, Codex, Cursor and Antigravity with an all-harness default and
+`--skill-dest` — the quit-and-reopen permission flow, and MCP protocol-version
+negotiation. 67/67 tests, zero warnings.
+
+**The tag was moved, not bumped.** v0.1.3 originally shipped `dfbc978`; the
+release and tag were deleted and re-cut at `ecc8396` to pick up the harness
+axis. Consequence to remember: the version string did not change, so anyone
+already on 0.1.3 sees "already up to date" and never gets this code, and a
+stale `~/Library/Caches/Homebrew` copy of the old DMG fails checksum against
+the new sha. Prefer a version bump over an overwrite next time.
 
 **The Screen Recording gate is closed** — a real grant cycle was walked
 2026-07-25 and the relaunch behaved. See "TCC walkthrough result" below.
 
 ### Release status — v0.1.3
 
-Verified independently after the run, not taken on trust:
-- Run `30174165770`: `test / build-and-test` **success** → `release` **success**.
-- Release `v0.1.3` published, asset `Seen-0.1.3.dmg` (1,279,181 bytes).
-- DMG sha256 `342a5d1c…b981` identical across three places: the downloaded
-  asset, `Casks/seen.rb` on `main` (bot commit `3a93234`), and the tap.
+Verified independently after the re-cut run, not taken on trust:
+- Run `30183743760`: `test / build-and-test` **success** → `release` **success**,
+  through the final "Push cask to Homebrew tap" step.
+- Release `v0.1.3` published, asset `Seen-0.1.3.dmg` (1,316,484 bytes).
+- DMG sha256 `f16ff59c…3c44` identical across three places: the downloaded
+  asset, `Casks/seen.rb` on `main` (bot commit `fb80b2e`), and the tap.
+- The shipped CLI really carries the new axis: `seen setup --help` from inside
+  the mounted DMG lists `all`/`claude`/`codex`/`cursor`/`antigravity`.
 - `xcrun stapler validate` passes on **both** the DMG and the app inside it;
   `spctl --type open` (DMG) and `--type execute` (app) both
   `accepted, source=Notarized Developer ID`;
