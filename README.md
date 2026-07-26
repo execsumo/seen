@@ -112,6 +112,19 @@ curl -o ~/.claude/skills/seen/SKILL.md \
 
 **Updating:** `brew upgrade --cask seen`
 
+> **Installed 0.1.3 before 2026-07-26?** `brew upgrade` won't move you. 0.1.3
+> was re-released in place to add the multi-harness `seen setup`, so the version
+> string never changed and Homebrew sees nothing to do. `brew reinstall` doesn't
+> work either — it fails on a checksum mismatch against the cached download.
+>
+> ```bash
+> rm -f ~/Library/Caches/Homebrew/downloads/*Seen-0.1.3.dmg
+> brew uninstall --cask seen && brew install --cask execsumo/tap/seen
+> ```
+>
+> `seen setup --help` tells you which build you have: the newer one lists
+> `codex` and `antigravity`.
+
 ---
 
 ## Using it
@@ -204,7 +217,7 @@ No Xcode needed — Command Line Tools are enough.
 
 ```bash
 swift build                 # compile
-swift run SeenTests         # 38 tests, no Screen Recording permission needed
+swift run SeenTests         # 67 tests, no Screen Recording permission needed
 ./scripts/bundle.sh         # build → Seen.app → /Applications
 ./scripts/bundle.sh --no-install   # build without touching /Applications
 ```
