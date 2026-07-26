@@ -275,6 +275,43 @@ let setupTests: [TestCase] = [
         try expectEqual(dest(.cursor, .global), String?.none)
     },
 
+    TestCase("harness: skill destination is overridable for an unknown harness") {
+        // --skill-dest names a skills *directory*; the file lands at <dir>/seen/SKILL.md.
+        // Asserted here as the layout every harness uses, so the override matches.
+        let home = URL(fileURLWithPath: "/home")
+        let ws = URL(fileURLWithPath: "/ws")
+        for h in SetupHarness.allCases {
+            guard let dest = h.skillDestination(scope: .global, home: home, workspace: ws) else { continue }
+            try expectEqual(dest.lastPathComponent, "SKILL.md")
+            try expectEqual(dest.deletingLastPathComponent().lastPathComponent, "seen")
+        }
+    },
+
+    TestCase("harness: CLI harnesses are detected by executable, file harnesses by path") {
+        let home = URL(fileURLWithPath: "/home")
+
+        // A leftover ~/.claude with no claude on PATH must not report a harness
+        // we would then fail to configure, so the CLI ones probe PATH only.
+        try expectEqual(SetupHarness.claude.detectionProbes(home: home), [.executable("claude")])
+        try expectEqual(SetupHarness.codex.detectionProbes(home: home), [.executable("codex")])
+
+        try expectEqual(SetupHarness.cursor.detectionProbes(home: home), [
+            .path(URL(fileURLWithPath: "/home/.cursor")),
+            .path(URL(fileURLWithPath: "/Applications/Cursor.app")),
+        ])
+        try expectEqual(SetupHarness.antigravity.detectionProbes(home: home), [
+            .path(URL(fileURLWithPath: "/home/.gemini")),
+            .path(URL(fileURLWithPath: "/Applications/Antigravity.app")),
+        ])
+    },
+
+    TestCase("harness: every harness offers at least one detection probe") {
+        let home = URL(fileURLWithPath: "/home")
+        for h in SetupHarness.allCases {
+            try expectEqual(h.detectionProbes(home: home).isEmpty, false)
+        }
+    },
+
     TestCase("harness: every harness is reachable and names a scope") {
         try expectEqual(SetupHarness.allCases.count, 4)
         for h in SetupHarness.allCases {

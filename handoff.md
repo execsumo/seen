@@ -566,11 +566,31 @@ skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
   survives on the two file-based harnesses (it predates this rework, where it
   kept tests off a real config); the CLI-based harnesses own their config
   location so they don't offer it.
-- **A harness doesn't declare a flag it can't honour.** Cursor has no skills
-  directory, so it has neither `--skill-only` nor `--yes` — ArgumentParser
-  rejects them at parse time. The protocol supplies defaults in an extension so
-  only the harnesses that mean something by a flag declare it. Same principle as
-  `codex --project`, one layer earlier.
+- **`Setup` must declare no flags of its own.** ArgumentParser matches a *parent*
+  command's options anywhere in the argument list, including after a subcommand
+  name. Putting `--mcp-only`/`--skill-only`/`--yes`/`--project` on `Setup` for
+  the all-harness sweep silently broke the same flags on all four subcommands:
+  `seen setup claude --skill-only` parsed without error, set the **parent's**
+  property, and left the subcommand's identically-named flag `false`, so
+  `--skill-only` cheerfully ran the MCP step anyway. The sweep therefore lives in
+  `Setup.All` (reached by name or as `defaultSubcommand`), so every flag belongs
+  to exactly one command. **Never add a stored flag to a command that has
+  subcommands sharing its flag names.**
+  Caught only by end-to-end runs asserting *what didn't happen* — the unit tests
+  cover the harness matrix, which was correct throughout. A cheap guard worth
+  re-running after any flag change: for each harness, `--skill-only` output must
+  not contain `MCP:` and `--mcp-only` output must not contain `Skill:`.
+- **`--skill-dest <dir>`** replaces the `--dest` that went with `setup skill`,
+  and is available on every harness subcommand. It names a skills *directory*;
+  the file lands at `<dir>/seen/SKILL.md`. This is the route for a harness Seen
+  has no entry for, and it's what makes Cursor's skill flags honourable — Cursor
+  has no skills directory, so `--skill-only` without `--skill-dest` exits 1
+  rather than quietly doing nothing.
+- **Detection for the sweep** probes `PATH` for the CLI-driven harnesses and the
+  config dir / app bundle for the file-driven ones — see `detectionProbes`. The
+  CLI ones deliberately do *not* probe `~/.claude` or `~/.codex`: a leftover
+  config directory with no binary on `PATH` would report a harness the sweep then
+  fails to configure.
 - **`bundle.sh`** copies `.claude/skills/seen/SKILL.md` to
   `Contents/Resources/seen-skill/SKILL.md` with a `cmp` guard, matching the two
   binary guards. Single source of truth kept: the repo file.

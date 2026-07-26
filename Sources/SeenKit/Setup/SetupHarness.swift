@@ -96,6 +96,40 @@ public enum SetupHarness: String, CaseIterable, Sendable {
         }
     }
 
+    /// Evidence that a harness is installed, for the bare `seen setup` sweep.
+    public enum Probe: Equatable, Sendable {
+        /// A command that must be on `PATH`.
+        case executable(String)
+        /// A file or directory that must exist.
+        case path(URL)
+    }
+
+    /// A harness counts as installed if *any* probe matches.
+    ///
+    /// The CLI-driven harnesses probe only for their executable, deliberately:
+    /// that binary is what registration actually shells out to, so a leftover
+    /// `~/.claude` with no `claude` on PATH would otherwise report a harness we
+    /// then fail to configure. The file-driven ones have no CLI to look for, so
+    /// they probe their config directory and their app bundle.
+    public func detectionProbes(home: URL) -> [Probe] {
+        switch self {
+        case .claude:
+            return [.executable("claude")]
+        case .codex:
+            return [.executable("codex")]
+        case .cursor:
+            return [
+                .path(home.appendingPathComponent(".cursor")),
+                .path(URL(fileURLWithPath: "/Applications/Cursor.app")),
+            ]
+        case .antigravity:
+            return [
+                .path(home.appendingPathComponent(".gemini")),
+                .path(URL(fileURLWithPath: "/Applications/Antigravity.app")),
+            ]
+        }
+    }
+
     /// Shown after a change lands, when the harness only reads its config at launch.
     public var restartHint: String? {
         switch self {

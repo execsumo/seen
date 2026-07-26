@@ -38,12 +38,12 @@ seen health
 **4. Connect your agent**
 
 ```bash
-seen setup claude
+seen setup
 ```
 
-One command per harness, and each one configures everything that harness
-supports — the MCP server plus the agent skill that teaches it when to look at
-your screen:
+That configures every harness it finds on your machine. Each one gets
+everything it supports — the MCP server plus the agent skill that teaches it
+when to look at your screen. Name a harness to do just that one:
 
 ```bash
 seen setup claude        # Claude Code — MCP + skill
@@ -70,6 +70,17 @@ Codex stores both its MCP servers and its skills globally, so it rejects
 Narrow what gets installed with `--mcp-only` or `--skill-only`, and skip the
 overwrite prompt with `--yes`. Re-running a completed setup is a no-op that
 exits 0 — it reports each piece as already current rather than failing.
+
+`seen setup` only touches harnesses it can find; anything missing is listed and
+skipped. Where a harness has no per-project config (Codex), the sweep falls back
+to global with a note instead of failing.
+
+For an agent Seen doesn't know about, `--skill-dest` puts the skill anywhere —
+it names a *skills directory*, and the file lands at `<dir>/seen/SKILL.md`:
+
+```bash
+seen setup cursor --skill-only --skill-dest ~/.myagent/skills
+```
 
 | Harness | MCP config | Skill |
 |---|---|---|

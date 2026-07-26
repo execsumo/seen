@@ -126,13 +126,20 @@ In addition to the server endpoints, the `seen` binary provides local setup comm
 Setup is organised by *harness*, not by artifact: one subcommand per agent, each
 installing everything that harness supports.
 
-- `seen setup claude [--project] [--mcp-only] [--skill-only] [--yes]`: Registers the MCP server via `claude mcp add` (scope `user`, or `project` with `--project`) and installs `SKILL.md` to `~/.claude/skills/seen/` (or `./.claude/skills/seen/`).
-- `seen setup codex [--mcp-only] [--skill-only] [--yes]`: Registers the MCP server via `codex mcp add` and installs `SKILL.md` to `~/.codex/skills/seen/`. Global only — `--project` is rejected, since Codex stores both globally.
-- `seen setup cursor [--project] [--mcp-only] [--config <path>]`: Merges the `seen mcp` server into `~/.cursor/mcp.json` (or `./.cursor/mcp.json`). Cursor has no skills directory, so it declares neither `--skill-only` nor `--yes`, and the skill step reports as skipped.
-- `seen setup antigravity [--project] [--mcp-only] [--skill-only] [--yes] [--config <path>]`: Merges into `~/.gemini/config/mcp_config.json` (or `./.agents/mcp_config.json`) and installs `SKILL.md` to `~/.gemini/config/skills/seen/` (or `./.agents/skills/seen/`). Antigravity's config schema is identical to Cursor's, so both share one merge implementation.
+- `seen setup [all] [--project] [--mcp-only] [--skill-only] [--yes]`: Configures every harness detected on the machine; `all` is the default subcommand, so the bare `seen setup` does the same. Undetected harnesses are listed and skipped. A harness that cannot express `--project` falls back to global with a note rather than failing the sweep. Detection probes `PATH` for the CLI-driven harnesses (Claude Code, Codex) and the config directory or app bundle for the file-driven ones (Cursor, Antigravity).
+
+- `seen setup claude [--project] [--mcp-only] [--skill-only] [--yes] [--skill-dest <dir>]`: Registers the MCP server via `claude mcp add` (scope `user`, or `project` with `--project`) and installs `SKILL.md` to `~/.claude/skills/seen/` (or `./.claude/skills/seen/`).
+- `seen setup codex [--mcp-only] [--skill-only] [--yes] [--skill-dest <dir>]`: Registers the MCP server via `codex mcp add` and installs `SKILL.md` to `~/.codex/skills/seen/`. Global only — `--project` is rejected, since Codex stores both globally.
+- `seen setup cursor [--project] [--mcp-only] [--skill-only] [--yes] [--config <path>] [--skill-dest <dir>]`: Merges the `seen mcp` server into `~/.cursor/mcp.json` (or `./.cursor/mcp.json`). Cursor has no skills directory of its own, so the skill step reports as skipped unless `--skill-dest` names one.
+- `seen setup antigravity [--project] [--mcp-only] [--skill-only] [--yes] [--config <path>] [--skill-dest <dir>]`: Merges into `~/.gemini/config/mcp_config.json` (or `./.agents/mcp_config.json`) and installs `SKILL.md` to `~/.gemini/config/skills/seen/` (or `./.agents/skills/seen/`). Antigravity's config schema is identical to Cursor's, so both share one merge implementation.
 
 `--config <path>` overrides the destination for the file-based harnesses; the
 CLI-based ones (Claude Code, Codex) own their own config location.
+
+`--skill-dest <dir>` overrides where `SKILL.md` goes on any harness subcommand,
+writing to `<dir>/seen/SKILL.md`. It is the route for a harness Seen has no
+entry for, and the only way `seen setup cursor --skill-only` has anything to do
+— without it that combination exits 1 rather than silently doing nothing.
 
 Every command reports each step independently and exits 0 when each is either
 applied or already current; a non-zero exit means a step genuinely failed. A

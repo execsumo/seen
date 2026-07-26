@@ -335,11 +335,44 @@ enum SetupRunner {
     }
     }
 
-    static func installSkill(_ harness: SetupHarness, scope: SetupScope, yes: Bool) -> StepOutcome {
+    /// True if any of the harness's probes matches.
+    static func isInstalled(_ harness: SetupHarness) -> Bool {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let pathEnv = ProcessInfo.processInfo.environment["PATH"]
+
+        return harness.detectionProbes(home: home).contains { probe in
+            switch probe {
+            case .executable(let name):
+                return SetupCLI.resolveExecutable(named: name, pathEnv: pathEnv) {
+                    FileManager.default.isExecutableFile(atPath: $0)
+                } != nil
+            case .path(let url):
+                return FileManager.default.fileExists(atPath: url.path)
+            }
+        }
+    }
+
+    static func installSkill(
+        _ harness: SetupHarness,
+        scope: SetupScope,
+        yes: Bool,
+        destOverride: String?
+    ) -> StepOutcome {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let workspace = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 
-        guard let destURL = harness.skillDestination(scope: scope, home: home, workspace: workspace) else {
+        // --skill-dest names a *skills directory*; the file lands at
+        // <dir>/seen/SKILL.md, matching the layout every harness uses. This is
+        // also the route for a harness Seen doesn't know about.
+        let resolvedDest: URL?
+        if let destOverride = destOverride {
+            let expanded = NSString(string: destOverride).expandingTildeInPath
+            resolvedDest = URL(fileURLWithPath: expanded).appendingPathComponent("seen/SKILL.md")
+        } else {
+            resolvedDest = harness.skillDestination(scope: scope, home: home, workspace: workspace)
+        }
+
+        guard let destURL = resolvedDest else {
             return .skipped("Skill: \(harness.displayName) has no skills directory")
         }
 
@@ -388,14 +421,16 @@ protocol HarnessSetupCommand: AsyncParsableCommand {
     var yes: Bool { get }
     var skillOnly: Bool { get }
     var configOverride: String? { get }
+    var skillDest: String? { get }
 }
 
-// Defaults for harnesses that can't express a flag at all — a harness with no
-// skills directory doesn't declare --skill-only or --yes rather than accepting
-// them as no-ops.
+// Only `configOverride` gets a default, and only because the CLI-driven
+// harnesses have no config file to point at. Do NOT add a default here for
+// anything a subcommand satisfies with an `@Flag`: a property-wrapper witness
+// loses to a protocol-extension default, so the flag parses, the help lists it,
+// and the value silently reads `false` forever. That silently disabled
+// --skill-only and --yes until it was caught end to end.
 extension HarnessSetupCommand {
-    var yes: Bool { false }
-    var skillOnly: Bool { false }
     var configOverride: String? { nil }
 }
 
@@ -417,9 +452,11 @@ extension HarnessSetupCommand {
 
         let home = FileManager.default.homeDirectoryForCurrentUser
         let workspace = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let hasSkill = harness.skillDestination(scope: scope, home: home, workspace: workspace) != nil
+        let hasSkill = skillDest != nil
+            || harness.skillDestination(scope: scope, home: home, workspace: workspace) != nil
         if skillOnly && !hasSkill {
             print("\(harness.displayName) has no skills directory, so --skill-only has nothing to do.")
+            print("Pass --skill-dest <dir> to install the skill somewhere explicit.")
             throw ExitCode.failure
         }
 
@@ -429,7 +466,10 @@ extension HarnessSetupCommand {
         if !skillOnly {
             outcomes.append(SetupRunner.installMCP(harness, scope: scope, configOverride: configOverride))
         }
-        if !mcpOnly { outcomes.append(SetupRunner.installSkill(harness, scope: scope, yes: yes)) }
+        if !mcpOnly {
+            outcomes.append(SetupRunner.installSkill(
+                harness, scope: scope, yes: yes, destOverride: skillDest))
+        }
 
         for outcome in outcomes { print(outcome.line) }
 
@@ -442,11 +482,94 @@ extension HarnessSetupCommand {
     }
 }
 
+/// `Setup` itself declares **no flags**, deliberately.
+///
+/// ArgumentParser matches a parent command's options anywhere in the argument
+/// list, including after a subcommand name. A `--skill-only` on `Setup` would
+/// therefore swallow `seen setup claude --skill-only`: it parses without error,
+/// sets the *parent's* property, and the subcommand's identically-named flag
+/// stays false. That silently disabled --mcp-only/--skill-only/--yes on all
+/// four harnesses. The sweep lives in `All` instead, reached by name or as the
+/// default subcommand, so every flag belongs to exactly one command.
 struct Setup: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Setup Seen integrations.",
-        subcommands: [Claude.self, Codex.self, Cursor.self, Antigravity.self]
+        abstract: "Setup Seen for every installed harness. Name one to narrow it.",
+        subcommands: [All.self, Claude.self, Codex.self, Cursor.self, Antigravity.self],
+        defaultSubcommand: All.self
     )
+
+    struct All: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "all",
+            abstract: "Configure every harness found on this machine (the default)."
+        )
+
+        @Flag(name: .long, help: "Configure this project only, where the harness supports it.")
+        var project = false
+        @Flag(name: .long, help: "Overwrite an existing skill file without asking.")
+        var yes = false
+        @Flag(name: .customLong("mcp-only"), help: "Register the MCP servers only.")
+        var mcpOnly = false
+        @Flag(name: .customLong("skill-only"), help: "Install the skills only.")
+        var skillOnly = false
+
+    /// Configure every harness that's actually installed.
+    ///
+    /// Unlike the single-harness commands, a scope a harness can't express is
+    /// skipped with a note rather than being an error — failing the whole sweep
+    /// because one of four harnesses is global-only would be unhelpful.
+    mutating func run() async throws {
+        if mcpOnly && skillOnly {
+            print("--mcp-only and --skill-only are mutually exclusive.")
+            throw ExitCode.failure
+        }
+
+        let requested: SetupScope = project ? .project : .global
+        let detected = SetupHarness.allCases.filter { SetupRunner.isInstalled($0) }
+
+        guard !detected.isEmpty else {
+            print("No supported harness found on this machine.")
+            print("Looked for: " + SetupHarness.allCases.map(\.displayName).joined(separator: ", "))
+            print("Install one, or run `seen setup <harness>` to configure it anyway.")
+            throw ExitCode.failure
+        }
+
+        let skipped = SetupHarness.allCases.filter { !detected.contains($0) }
+        if !skipped.isEmpty {
+            print("Not installed, skipping: " + skipped.map(\.displayName).joined(separator: ", "))
+        }
+
+        var failed = false
+        var changed = false
+        for harness in detected {
+            let scope = harness.supports(requested) ? requested : .global
+            print("")
+            print("\(harness.displayName) (\(scope.rawValue))")
+            if scope != requested {
+                print("  – \(harness.displayName) has no per-project config; used global instead")
+            }
+
+            var outcomes: [StepOutcome] = []
+            if !skillOnly {
+                outcomes.append(SetupRunner.installMCP(harness, scope: scope, configOverride: nil))
+            }
+            if !mcpOnly {
+                outcomes.append(SetupRunner.installSkill(
+                    harness, scope: scope, yes: yes, destOverride: nil))
+            }
+            for outcome in outcomes { print(outcome.line) }
+
+            if outcomes.contains(where: { $0.isFailure }) { failed = true }
+            if outcomes.contains(where: { $0.changedSomething }) { changed = true }
+        }
+
+        if changed {
+            print("")
+            print("Restart the harnesses above to load the seen MCP server.")
+        }
+        if failed { throw ExitCode.failure }
+    }
+    }
 
     struct Claude: HarnessSetupCommand {
         static let configuration = CommandConfiguration(abstract: "Setup Seen for Claude Code (MCP + skill).")
@@ -455,6 +578,10 @@ struct Setup: AsyncParsableCommand {
         @Flag(name: .long, help: "Overwrite an existing skill file without asking.") var yes = false
         @Flag(name: .customLong("mcp-only"), help: "Register the MCP server only.") var mcpOnly = false
         @Flag(name: .customLong("skill-only"), help: "Install the skill only.") var skillOnly = false
+        @Option(name: .customLong("skill-dest"),
+                help: "Install the skill into this skills directory instead of the default.")
+        var skillDestOption: String?
+        var skillDest: String? { skillDestOption }
         mutating func run() async throws { try runHarnessSetup() }
     }
 
@@ -465,18 +592,30 @@ struct Setup: AsyncParsableCommand {
         @Flag(name: .long, help: "Overwrite an existing skill file without asking.") var yes = false
         @Flag(name: .customLong("mcp-only"), help: "Register the MCP server only.") var mcpOnly = false
         @Flag(name: .customLong("skill-only"), help: "Install the skill only.") var skillOnly = false
+        @Option(name: .customLong("skill-dest"),
+                help: "Install the skill into this skills directory instead of the default.")
+        var skillDestOption: String?
+        var skillDest: String? { skillDestOption }
         mutating func run() async throws { try runHarnessSetup() }
     }
 
-    // Cursor has no skills directory, so it declares neither --skill-only nor
-    // --yes: an unhonourable flag is worse absent than accepted-and-ignored.
+    // Cursor has no skills directory of its own, so its skill flags are only
+    // honourable alongside --skill-dest — which is what makes this command the
+    // route for a harness Seen doesn't know about. Without it, --skill-only
+    // errors rather than quietly doing nothing.
     struct Cursor: HarnessSetupCommand {
         static let configuration = CommandConfiguration(abstract: "Setup Seen for Cursor (MCP).")
         static let harness = SetupHarness.cursor
         @Flag(name: .long, help: "Configure this project only.") var project = false
+        @Flag(name: .long, help: "Overwrite an existing skill file without asking.") var yes = false
         @Flag(name: .customLong("mcp-only"), help: "Register the MCP server only.") var mcpOnly = false
+        @Flag(name: .customLong("skill-only"), help: "Install the skill only (needs --skill-dest).") var skillOnly = false
         @Option(name: .long, help: "Write to this config file instead of the default.") var config: String?
+        @Option(name: .customLong("skill-dest"),
+                help: "Install the skill into this skills directory. Cursor has no default.")
+        var skillDestOption: String?
         var configOverride: String? { config }
+        var skillDest: String? { skillDestOption }
         mutating func run() async throws { try runHarnessSetup() }
     }
 
@@ -488,7 +627,11 @@ struct Setup: AsyncParsableCommand {
         @Flag(name: .customLong("mcp-only"), help: "Register the MCP server only.") var mcpOnly = false
         @Flag(name: .customLong("skill-only"), help: "Install the skill only.") var skillOnly = false
         @Option(name: .long, help: "Write to this config file instead of the default.") var config: String?
+        @Option(name: .customLong("skill-dest"),
+                help: "Install the skill into this skills directory instead of the default.")
+        var skillDestOption: String?
         var configOverride: String? { config }
+        var skillDest: String? { skillDestOption }
         mutating func run() async throws { try runHarnessSetup() }
     }
 }
