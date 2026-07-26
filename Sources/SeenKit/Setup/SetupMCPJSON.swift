@@ -17,7 +17,10 @@ public enum SetupError: Error, LocalizedError {
     }
 }
 
-public struct SetupCursor {
+/// Merges the seen server into an `mcpServers` JSON config. Cursor's
+/// `mcp.json` and Antigravity's `mcp_config.json` use the identical schema, so
+/// one merge covers both — only the path differs.
+public struct SetupMCPJSON {
     public static func merge(into configPath: URL) throws -> Bool {
         let fm = FileManager.default
         let dir = configPath.deletingLastPathComponent()

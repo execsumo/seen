@@ -237,171 +237,258 @@ extension ImageFormat: ExpressibleByArgument {
         self.init(rawValue: argument)
     }
 }
+/// The outcome of one setup step, so a command that does two things can report
+/// each honestly. `alreadyCurrent` is a success: re-running setup on a
+/// configured machine must not look like a failure.
+enum StepOutcome {
+    case applied(String)
+    case alreadyCurrent(String)
+    case skipped(String)
+    case failed(String)
+
+    var line: String {
+        switch self {
+        case .applied(let m): return "  ✓ \(m)"
+        case .alreadyCurrent(let m): return "  · \(m)"
+        case .skipped(let m): return "  – \(m)"
+        case .failed(let m): return "  ✗ \(m)"
+        }
+    }
+
+    var isFailure: Bool { if case .failed = self { return true }; return false }
+    var changedSomething: Bool { if case .applied = self { return true }; return false }
+}
+
+enum SetupRunner {
+    /// Runs a harness CLI and captures its output.
+    ///
+    /// The child must get no terminal. Foundation spawns it into a new process
+    /// group, so an inherited tty gets it SIGTTIN/SIGTTOU'd into a stopped state
+    /// and waitUntilExit() never returns — that was the v0.1.3 `setup claude`
+    /// hang. Null stdin plus one pipe for both streams, drained before the wait.
+    static func run(executable: String, arguments: [String]) throws -> (status: Int32, output: String) {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: executable)
+        p.arguments = arguments
+
+        let pipe = Pipe()
+        p.standardInput = FileHandle.nullDevice
+        p.standardOutput = pipe
+        p.standardError = pipe
+        try p.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+
+        let text = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (p.terminationStatus, text)
+    }
+
+    static func installMCP(_ harness: SetupHarness, scope: SetupScope, configOverride: String?) -> StepOutcome {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let workspace = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+
+        var install = harness.mcpInstall(scope: scope, home: home, workspace: workspace)
+        // --config points the JSON merge at an explicit file. Only meaningful for
+        // the file-based harnesses; the CLI ones own their own config location.
+        if let configOverride = configOverride, case .jsonMerge = install {
+            install = .jsonMerge(URL(fileURLWithPath: NSString(string: configOverride).expandingTildeInPath))
+        }
+
+        switch install {
+        case .cli(let executable, let arguments):
+            let resolved = SetupCLI.resolveExecutable(
+                named: executable,
+                pathEnv: ProcessInfo.processInfo.environment["PATH"]
+            ) { FileManager.default.isExecutableFile(atPath: $0) }
+
+            guard let resolved = resolved else {
+                let manual = ([executable] + arguments).joined(separator: " ")
+                return .failed("MCP: \(executable) not found on PATH. Run it yourself:\n      \(manual)")
+            }
+
+            do {
+                let result = try run(executable: resolved, arguments: arguments)
+                if result.status == 0 {
+                    return .applied("MCP: registered with \(harness.displayName)")
+                }
+                // The harness CLIs exit non-zero on a duplicate add. That's an
+                // already-configured machine, not a failure. Matching their
+                // message is a heuristic; if it ever stops matching we fall
+                // through and surface their own text rather than guessing.
+                if result.output.lowercased().contains("already exists") {
+                    return .alreadyCurrent("MCP: already registered with \(harness.displayName)")
+                }
+                return .failed("MCP: \(executable) exited \(result.status)\n      \(result.output)")
+            } catch {
+                return .failed("MCP: could not run \(executable) — \(error.localizedDescription)")
+            }
+
+        case .jsonMerge(let url):
+            do {
+                let changed = try SetupMCPJSON.merge(into: url)
+                return changed ? .applied("MCP: wrote \(url.path)")
+                               : .alreadyCurrent("MCP: already configured in \(url.path)")
+            } catch {
+                return .failed("MCP: \(error.localizedDescription)")
+            }
+    }
+    }
+
+    static func installSkill(_ harness: SetupHarness, scope: SetupScope, yes: Bool) -> StepOutcome {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let workspace = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+
+        guard let destURL = harness.skillDestination(scope: scope, home: home, workspace: workspace) else {
+            return .skipped("Skill: \(harness.displayName) has no skills directory")
+        }
+
+        let exeURL = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
+        let sourceURL: URL
+        do {
+            sourceURL = try SetupSkill.resolveSourcePath(executableURL: exeURL)
+        } catch {
+            return .failed("Skill: \(error.localizedDescription)")
+        }
+
+        do {
+            if FileManager.default.fileExists(atPath: destURL.path) {
+                let sourceData = try Data(contentsOf: sourceURL)
+                if (try? Data(contentsOf: destURL)) == sourceData {
+                    return .alreadyCurrent("Skill: already current at \(destURL.path)")
+                }
+                if !yes {
+                    guard isatty(STDIN_FILENO) == 1 else {
+                        return .failed("Skill: \(destURL.path) exists and differs. Re-run with --yes to overwrite.")
+                    }
+                    print("Skill exists at \(destURL.path). Overwrite? [y/N]: ", terminator: "")
+                    fflush(stdout)
+                    guard let line = readLine(), line.lowercased().starts(with: "y") else {
+                        return .skipped("Skill: left \(destURL.path) unchanged")
+                    }
+                }
+            }
+
+            let changed = try SetupSkill.installSkill(sourceURL: sourceURL, destURL: destURL)
+            return changed ? .applied("Skill: installed to \(destURL.path)")
+                           : .alreadyCurrent("Skill: already current at \(destURL.path)")
+        } catch {
+            return .failed("Skill: \(error.localizedDescription)")
+        }
+    }
+}
+
+/// Shared behaviour for the per-harness subcommands. Each one configures
+/// everything its harness supports — MCP server and skill — so there is one
+/// command per harness rather than one per artifact kind.
+protocol HarnessSetupCommand: AsyncParsableCommand {
+    static var harness: SetupHarness { get }
+    var project: Bool { get }
+    var mcpOnly: Bool { get }
+    var yes: Bool { get }
+    var skillOnly: Bool { get }
+    var configOverride: String? { get }
+}
+
+// Defaults for harnesses that can't express a flag at all — a harness with no
+// skills directory doesn't declare --skill-only or --yes rather than accepting
+// them as no-ops.
+extension HarnessSetupCommand {
+    var yes: Bool { false }
+    var skillOnly: Bool { false }
+    var configOverride: String? { nil }
+}
+
+extension HarnessSetupCommand {
+    func runHarnessSetup() throws {
+        let harness = Self.harness
+
+        if mcpOnly && skillOnly {
+            print("--mcp-only and --skill-only are mutually exclusive.")
+            throw ExitCode.failure
+        }
+
+        let scope: SetupScope = project ? .project : .global
+        guard harness.supports(scope) else {
+            print("\(harness.displayName) stores its configuration globally and has no per-project equivalent.")
+            print("Re-run without --project.")
+            throw ExitCode.failure
+        }
+
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let workspace = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let hasSkill = harness.skillDestination(scope: scope, home: home, workspace: workspace) != nil
+        if skillOnly && !hasSkill {
+            print("\(harness.displayName) has no skills directory, so --skill-only has nothing to do.")
+            throw ExitCode.failure
+        }
+
+        print("Configuring \(harness.displayName) (\(scope.rawValue))")
+
+        var outcomes: [StepOutcome] = []
+        if !skillOnly {
+            outcomes.append(SetupRunner.installMCP(harness, scope: scope, configOverride: configOverride))
+        }
+        if !mcpOnly { outcomes.append(SetupRunner.installSkill(harness, scope: scope, yes: yes)) }
+
+        for outcome in outcomes { print(outcome.line) }
+
+        if outcomes.contains(where: { $0.isFailure }) {
+            throw ExitCode.failure
+        }
+        if outcomes.contains(where: { $0.changedSomething }), let hint = harness.restartHint {
+            print(hint)
+        }
+    }
+}
 
 struct Setup: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Setup Seen integrations.",
-        subcommands: [Claude.self, Cursor.self, Skill.self]
+        subcommands: [Claude.self, Codex.self, Cursor.self, Antigravity.self]
     )
-    
-    struct Claude: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Setup Seen for Claude.")
-        mutating func run() async throws {
-            let pathEnv = ProcessInfo.processInfo.environment["PATH"]
-            
-            let execPath = SetupClaude.resolveExecutable(pathEnv: pathEnv) { path in
-                FileManager.default.isExecutableFile(atPath: path)
-            }
-            
-            guard let execPath = execPath else {
-                print("claude not found on PATH. Run this command manually:\n  claude mcp add seen -- seen mcp")
-                throw ExitCode.failure
-            }
-            
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: execPath)
-            p.arguments = SetupClaude.arguments
 
-            // Foundation spawns the child into its own process group, so a child
-            // that touches the inherited terminal is SIGTTIN/SIGTTOU'd into a
-            // stopped state and waitUntilExit() blocks forever. claude does that.
-            // Hand it no terminal at all: null stdin, one pipe for both outputs.
-            let pipe = Pipe()
-            p.standardInput = FileHandle.nullDevice
-            p.standardOutput = pipe
-            p.standardError = pipe
-            try p.run()
-            // Drain before waiting — waiting first deadlocks once the pipe fills.
-            let out = pipe.fileHandleForReading.readDataToEndOfFile()
-            p.waitUntilExit()
-
-            let text = String(data: out, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if !text.isEmpty { print(text) }
-
-            if p.terminationStatus != 0 {
-                print("claude mcp add exited with status \(p.terminationStatus) (see its output above).")
-                throw ExitCode(p.terminationStatus)
-            }
-        }
+    struct Claude: HarnessSetupCommand {
+        static let configuration = CommandConfiguration(abstract: "Setup Seen for Claude Code (MCP + skill).")
+        static let harness = SetupHarness.claude
+        @Flag(name: .long, help: "Configure this project only.") var project = false
+        @Flag(name: .long, help: "Overwrite an existing skill file without asking.") var yes = false
+        @Flag(name: .customLong("mcp-only"), help: "Register the MCP server only.") var mcpOnly = false
+        @Flag(name: .customLong("skill-only"), help: "Install the skill only.") var skillOnly = false
+        mutating func run() async throws { try runHarnessSetup() }
     }
-    
-    struct Cursor: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Setup Seen for Cursor.")
-        
-        @Flag(name: .long) var project = false
-        @Option(name: .long) var config: String?
-        
-        mutating func run() async throws {
-            let url: URL
-            if let config = config {
-                url = URL(fileURLWithPath: config)
-            } else if project {
-                url = URL(fileURLWithPath: "./.cursor/mcp.json")
-            } else {
-                url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cursor/mcp.json")
-            }
-            
-            do {
-                let changed = try SetupCursor.merge(into: url)
-                if changed {
-                    print("Updated \(url.path)")
-                    print("Please restart Cursor to apply the changes.")
-                } else {
-                    print("Already configured in \(url.path)")
-                }
-            } catch {
-                print("Error: \(error.localizedDescription)")
-                throw ExitCode.failure
-            }
-        }
+
+    struct Codex: HarnessSetupCommand {
+        static let configuration = CommandConfiguration(abstract: "Setup Seen for Codex (MCP + skill).")
+        static let harness = SetupHarness.codex
+        @Flag(name: .long, help: "Not supported — Codex configures globally.") var project = false
+        @Flag(name: .long, help: "Overwrite an existing skill file without asking.") var yes = false
+        @Flag(name: .customLong("mcp-only"), help: "Register the MCP server only.") var mcpOnly = false
+        @Flag(name: .customLong("skill-only"), help: "Install the skill only.") var skillOnly = false
+        mutating func run() async throws { try runHarnessSetup() }
     }
-    
-    struct Skill: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(abstract: "Setup Seen skill.")
-        
-        @Option(name: .long) var dest: String?
-        @Flag(name: .long) var project = false
-        @Flag(name: .long) var yes = false
-        
-        mutating func run() async throws {
-            let exeURL = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
-            let sourceURL: URL
-            do {
-                sourceURL = try SetupSkill.resolveSourcePath(executableURL: exeURL)
-            } catch {
-                print("Error finding SKILL.md: \(error.localizedDescription)")
-                throw ExitCode.failure
-            }
-            
-            let destURL: URL
-            if let dest = dest {
-                let expanded = NSString(string: dest).expandingTildeInPath
-                destURL = URL(fileURLWithPath: expanded).appendingPathComponent("seen/SKILL.md")
-            } else if project {
-                destURL = URL(fileURLWithPath: "./.claude/skills/seen/SKILL.md")
-            } else if isatty(STDIN_FILENO) == 0 && !yes {
-                print("Cannot prompt interactively. Use --dest or --yes to specify destination.")
-                print("Example: seen setup skill --yes")
-                throw ExitCode.failure
-            } else if isatty(STDIN_FILENO) == 1 && !yes {
-                print("Install Seen skill?")
-                print("1. Claude Code, all projects (~/.claude/skills)")
-                print("2. Claude Code, this project only (./.claude/skills)")
-                print("3. Another path")
-                print("4. Skip")
-                print("Choice [1]: ", terminator: "")
-                fflush(stdout)
-                
-                guard let line = readLine() else { throw ExitCode.failure }
-                let choice = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                if choice == "1" || choice.isEmpty {
-                    destURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/skills/seen/SKILL.md")
-                } else if choice == "2" {
-                    destURL = URL(fileURLWithPath: "./.claude/skills/seen/SKILL.md")
-                } else if choice == "3" {
-                    print("Enter path: ", terminator: "")
-                    fflush(stdout)
-                    guard let p = readLine(), !p.isEmpty else { throw ExitCode.failure }
-                    let expanded = NSString(string: p).expandingTildeInPath
-                    destURL = URL(fileURLWithPath: expanded).appendingPathComponent("seen/SKILL.md")
-                } else {
-                    return
-                }
-            } else {
-                destURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/skills/seen/SKILL.md")
-            }
-            
-            do {
-                if FileManager.default.fileExists(atPath: destURL.path) {
-                    let sourceData = try Data(contentsOf: sourceURL)
-                    let destData = try? Data(contentsOf: destURL)
-                    if sourceData == destData {
-                        print("Skill already installed and identical at \(destURL.path)")
-                        return
-                    }
-                    if !yes {
-                        if isatty(STDIN_FILENO) == 1 {
-                            print("File exists at \(destURL.path). Overwrite? [y/N]: ", terminator: "")
-                            fflush(stdout)
-                            guard let line = readLine(), line.lowercased().starts(with: "y") else {
-                                return
-                            }
-                        } else {
-                            print("File exists. Use --yes to overwrite.")
-                            throw ExitCode.failure
-                        }
-                    }
-                }
-                
-                let changed = try SetupSkill.installSkill(sourceURL: sourceURL, destURL: destURL)
-                if changed {
-                    print("Installed skill to \(destURL.path)")
-                }
-            } catch {
-                print("Error: \(error.localizedDescription)")
-                throw ExitCode.failure
-            }
-        }
+
+    // Cursor has no skills directory, so it declares neither --skill-only nor
+    // --yes: an unhonourable flag is worse absent than accepted-and-ignored.
+    struct Cursor: HarnessSetupCommand {
+        static let configuration = CommandConfiguration(abstract: "Setup Seen for Cursor (MCP).")
+        static let harness = SetupHarness.cursor
+        @Flag(name: .long, help: "Configure this project only.") var project = false
+        @Flag(name: .customLong("mcp-only"), help: "Register the MCP server only.") var mcpOnly = false
+        @Option(name: .long, help: "Write to this config file instead of the default.") var config: String?
+        var configOverride: String? { config }
+        mutating func run() async throws { try runHarnessSetup() }
+    }
+
+    struct Antigravity: HarnessSetupCommand {
+        static let configuration = CommandConfiguration(abstract: "Setup Seen for Antigravity (MCP + skill).")
+        static let harness = SetupHarness.antigravity
+        @Flag(name: .long, help: "Configure this workspace only.") var project = false
+        @Flag(name: .long, help: "Overwrite an existing skill file without asking.") var yes = false
+        @Flag(name: .customLong("mcp-only"), help: "Register the MCP server only.") var mcpOnly = false
+        @Flag(name: .customLong("skill-only"), help: "Install the skill only.") var skillOnly = false
+        @Option(name: .long, help: "Write to this config file instead of the default.") var config: String?
+        var configOverride: String? { config }
+        mutating func run() async throws { try runHarnessSetup() }
     }
 }

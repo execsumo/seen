@@ -516,38 +516,76 @@ skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
   `SeenTests` is an executable target and cannot import another executable — the
   same reason `AppCore` exists. The CLI is a thin shell: flags, default paths,
   printing, exit codes.
-- **`seen setup cursor [--project] [--config <path>]`** — merges only the `seen`
-  key into `~/.cursor/mcp.json`, preserves every other server, writes via temp +
-  `rename`, and **refuses** a file that doesn't parse rather than replacing it.
-  Re-running prints "Already configured" and rewrites nothing. `--config` exists
-  so tests never touch a real config.
-- **`seen setup skill [--dest <dir>] [--project] [--yes]`** — prompts for the
-  destination (`~/.claude/skills` / `./.claude/skills` / another path / skip),
-  gated on `isatty(STDIN_FILENO)` so it exits with a hint instead of blocking in
-  a script, CI, or an agent session. Only Claude Code is offered by name: it's
-  the one harness whose skills layout is verified. `~/.cursor` has `mcp.json` and
-  `hooks.json` but no skills directory, so `--dest` covers everything else
-  instead of inventing paths.
-- **`seen setup claude`** — shells out to `claude mcp add seen -- seen mcp`.
-  Prints the manual command and exits non-zero if `claude` isn't on `PATH`;
-  prints claude's captured output and adds one Seen-level line on a non-zero
-  exit so a duplicate-add doesn't read as Seen breaking.
-  **The child must get no terminal** — null stdin, one `Pipe` for stdout+stderr,
-  drained *before* `waitUntilExit()`. Foundation's `Process` spawns into a new
-  process group, so an inherited tty gets the child SIGTTIN/SIGTTOU'd into `T`
-  (stopped) forever and the parent's wait never returns. That shipped in v0.1.3
-  as a total hang of `seen setup claude` with zero output; fixed 2026-07-25.
+- **`seen setup` is organised by harness, not by artifact** (reworked
+  2026-07-25). One subcommand per agent — `claude`, `codex`, `cursor`,
+  `antigravity` — each installing everything that harness supports. The old
+  `seen setup skill` is **gone**: it mixed axes (two subcommands named a harness,
+  one named an artifact) and its own menu only ever offered Claude Code paths, so
+  it was `setup claude --skill` in disguise. Its `--dest` escape hatch went with
+  it, so an unlisted harness now has no built-in route — the README `curl`
+  fallback is the documented answer.
+- **The matrix lives in `SetupHarness` as pure data.** `mcpInstall(scope:home:
+  workspace:)` and `skillDestination(scope:home:workspace:)` are functions of
+  their arguments, so all four harnesses' paths are asserted against fake roots
+  without writing anywhere near `~`. Adding a harness means extending that enum,
+  not touching the command layer. Verified paths, each from a primary source:
+  Codex skills are `$CODEX_HOME/skills/<name>` (its own `skill-installer`
+  SKILL.md); Antigravity is `~/.gemini/config/{mcp_config.json,skills}` and
+  `./.agents/{mcp_config.json,skills}` (antigravity.google/docs/mcp + /docs/skills).
+  **Do not infer these.** `~/.gemini/antigravity-cli/skills` exists on disk and
+  looks like the user skills dir; the docs say it isn't.
+- **Antigravity's MCP schema is byte-identical to Cursor's** (`mcpServers` with
+  `command`/`args`/`env`), so `SetupMCPJSON.merge` — formerly `SetupCursor` —
+  serves both, differing only in path.
+- **Partial success is defined, and supersedes the old duplicate-add note.** Each
+  command runs up to two steps and reports them independently; exit 0 when every
+  step is *applied or already current*, non-zero only on genuine failure. This
+  matters because the two halves disagreed by default: `installSkill` returns
+  false for byte-identical (success), while `claude mcp add` exits 1 on a
+  duplicate. Left alone, a fully-configured machine would see `setup claude`
+  exit 1. Duplicate detection matches "already exists" in the harness CLI's own
+  output — a heuristic; if it stops matching, the step degrades to a reported
+  failure showing the harness's own text rather than silently guessing.
+- **`--project` is rejected, not ignored, where it has no meaning.** Codex stores
+  MCP servers (`~/.codex/config.toml`) and skills globally with no per-workspace
+  equivalent, so `seen setup codex --project` exits 1 with an explanation.
+- **`setup claude` now passes an explicit `-s`** (`user` globally, `project` with
+  `--project`). claude's own default is `local` — private and cwd-bound — which
+  matched neither of our scopes and meant the pre-2026-07-25 command silently
+  registered seen only for whatever directory you happened to be in.
+- **The harness CLI child must get no terminal** — null stdin, one `Pipe` for
+  stdout+stderr, drained *before* `waitUntilExit()`. Foundation's `Process`
+  spawns into a new process group, so an inherited tty gets the child
+  SIGTTIN/SIGTTOU'd into `T` (stopped) forever and the parent's wait never
+  returns. That shipped in v0.1.3 as a total hang of `seen setup claude` with
+  zero output; fixed 2026-07-25. It now lives once in `SetupRunner.run`, which is
+  the only place a harness CLI is spawned — keep it that way.
+- **`SetupMCPJSON.merge`** merges only the `seen` key, preserves every other
+  server, writes via temp + `rename`, and **refuses** a file that doesn't parse
+  rather than replacing it. Re-running rewrites nothing. `--config <path>`
+  survives on the two file-based harnesses (it predates this rework, where it
+  kept tests off a real config); the CLI-based harnesses own their config
+  location so they don't offer it.
+- **A harness doesn't declare a flag it can't honour.** Cursor has no skills
+  directory, so it has neither `--skill-only` nor `--yes` — ArgumentParser
+  rejects them at parse time. The protocol supplies defaults in an extension so
+  only the harnesses that mean something by a flag declare it. Same principle as
+  `codex --project`, one layer earlier.
 - **`bundle.sh`** copies `.claude/skills/seen/SKILL.md` to
   `Contents/Resources/seen-skill/SKILL.md` with a `cmp` guard, matching the two
   binary guards. Single source of truth kept: the repo file.
-- **README** points Cursor users at `seen setup cursor` and the skill block at
-  `seen setup skill`, keeping the hand-written JSON and the `curl` as documented
-  fallbacks. `docs/api.md` gained a CLI-surface note (doc written first).
+- **README** leads with the four `seen setup <harness>` commands and a path
+  matrix, keeping the hand-written JSON and the `curl` as documented fallbacks.
+  `docs/api.md` carries the per-flag CLI surface.
 - Verification worth repeating for any change here: bare `seen` found via `PATH`
   from an unrelated cwd, on **both** a dev build and a `bundle.sh` bundle reached
   through a symlink; malformed-config refusal with the file left byte-identical;
   no-TTY exiting fast; and `setup claude` driven by a fake `claude` earlier on
   `PATH` so the real `~/.claude.json` is never touched.
+  Exercise the *`--project` scopes* against a temp workspace — they need no `HOME`
+  override, so they cover the JSON-merge and skill-install legs end to end
+  without any risk to real config. Global scopes write to `~`; drive those with
+  `--mcp-only` and a fake harness CLI unless you have a sandboxed `HOME`.
   The fake `claude` must **read stdin and call `stty`**, and the whole thing must
   run under a real pty (`pty.fork`, not this shell's pipe-only stdio) — a fake
   that just prints and exits is what let the v0.1.3 hang through, because with no

@@ -2,7 +2,7 @@ import Foundation
 import SeenKit
 
 let setupTests: [TestCase] = [
-    TestCase("setup cursor: merge preserves siblings") {
+    TestCase("setup mcp json: merge preserves siblings") {
         let fm = FileManager.default
         let url = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("mcp.json")
         defer { try? fm.removeItem(at: url.deletingLastPathComponent()) }
@@ -18,7 +18,7 @@ let setupTests: [TestCase] = [
         """.data(using: .utf8)!
         try initialJSON.write(to: url)
         
-        let changed = try SetupCursor.merge(into: url)
+        let changed = try SetupMCPJSON.merge(into: url)
         try expectEqual(changed, true)
         
         let data = try Data(contentsOf: url)
@@ -29,7 +29,7 @@ let setupTests: [TestCase] = [
         try expectEqual((servers["seen"] as! [String: Any])["command"] as? String, "seen")
     },
     
-    TestCase("setup cursor: merge replaces existing seen key without duplicating and returns true if changed") {
+    TestCase("setup mcp json: merge replaces existing seen key without duplicating and returns true if changed") {
         let fm = FileManager.default
         let url = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("mcp.json")
         defer { try? fm.removeItem(at: url.deletingLastPathComponent()) }
@@ -44,7 +44,7 @@ let setupTests: [TestCase] = [
         """.data(using: .utf8)!
         try initialJSON.write(to: url)
         
-        let changed = try SetupCursor.merge(into: url)
+        let changed = try SetupMCPJSON.merge(into: url)
         try expectEqual(changed, true)
         
         let data = try Data(contentsOf: url)
@@ -55,7 +55,7 @@ let setupTests: [TestCase] = [
         try expectEqual((servers["seen"] as! [String: Any])["args"] as? [String], ["mcp"])
     },
     
-    TestCase("setup cursor: merge does nothing if already identical") {
+    TestCase("setup mcp json: merge does nothing if already identical") {
         let fm = FileManager.default
         let url = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("mcp.json")
         defer { try? fm.removeItem(at: url.deletingLastPathComponent()) }
@@ -70,11 +70,11 @@ let setupTests: [TestCase] = [
         """.data(using: .utf8)!
         try initialJSON.write(to: url)
         
-        let changed = try SetupCursor.merge(into: url)
+        let changed = try SetupMCPJSON.merge(into: url)
         try expectEqual(changed, false)
     },
     
-    TestCase("setup cursor: malformed input throws") {
+    TestCase("setup mcp json: malformed input throws") {
         let fm = FileManager.default
         let url = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("mcp.json")
         defer { try? fm.removeItem(at: url.deletingLastPathComponent()) }
@@ -82,20 +82,20 @@ let setupTests: [TestCase] = [
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try "not json".data(using: .utf8)!.write(to: url)
         
-        _ = try await expectThrows { _ = try SetupCursor.merge(into: url) }
+        _ = try await expectThrows { _ = try SetupMCPJSON.merge(into: url) }
         
         // Ensure not replaced
         let data = try Data(contentsOf: url)
         try expectEqual(String(data: data, encoding: .utf8), "not json")
     },
     
-    TestCase("setup cursor: atomic write leaves no temp file behind") {
+    TestCase("setup mcp json: atomic write leaves no temp file behind") {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let url = dir.appendingPathComponent("mcp.json")
         defer { try? fm.removeItem(at: dir) }
         
-        _ = try SetupCursor.merge(into: url)
+        _ = try SetupMCPJSON.merge(into: url)
         
         let contents = try fm.contentsOfDirectory(atPath: dir.path)
         try expectEqual(contents.count, 1)
@@ -178,23 +178,108 @@ let setupTests: [TestCase] = [
         try expectEqual(resolved.path, bundleSkillURL.path)
     },
     
-    TestCase("setup claude: resolveExecutable finds first match") {
+    TestCase("setup cli: resolveExecutable finds first match") {
         let pathEnv = "/usr/bin:/opt/homebrew/bin:/usr/local/bin"
-        
-        let exec = SetupClaude.resolveExecutable(pathEnv: pathEnv) { path in
+
+        let exec = SetupCLI.resolveExecutable(named: "claude", pathEnv: pathEnv) { path in
             return path == "/opt/homebrew/bin/claude"
         }
-        
+
         try expectEqual(exec, "/opt/homebrew/bin/claude")
     },
-    
-    TestCase("setup claude: resolveExecutable returns nil for nil or empty or none executable") {
-        try expectEqual(SetupClaude.resolveExecutable(pathEnv: nil, isExecutable: { _ in true }), nil)
-        try expectEqual(SetupClaude.resolveExecutable(pathEnv: "", isExecutable: { _ in true }), nil)
-        try expectEqual(SetupClaude.resolveExecutable(pathEnv: "/usr/bin", isExecutable: { _ in false }), nil)
+
+    TestCase("setup cli: resolveExecutable honours the requested name") {
+        let pathEnv = "/usr/bin:/opt/homebrew/bin"
+
+        let exec = SetupCLI.resolveExecutable(named: "codex", pathEnv: pathEnv) { path in
+            return path == "/opt/homebrew/bin/codex"
+        }
+
+        try expectEqual(exec, "/opt/homebrew/bin/codex")
+        try expectEqual(SetupCLI.resolveExecutable(named: "claude", pathEnv: pathEnv) { path in
+            return path == "/opt/homebrew/bin/codex"
+        }, String?.none)
     },
-    
-    TestCase("setup claude: arguments match spec") {
-        try expectEqual(SetupClaude.arguments, ["mcp", "add", "seen", "--", "seen", "mcp"])
+
+    TestCase("setup cli: resolveExecutable returns nil for nil or empty or none executable") {
+        try expectEqual(SetupCLI.resolveExecutable(named: "claude", pathEnv: nil, isExecutable: { _ in true }), String?.none)
+        try expectEqual(SetupCLI.resolveExecutable(named: "claude", pathEnv: "", isExecutable: { _ in true }), String?.none)
+        try expectEqual(SetupCLI.resolveExecutable(named: "claude", pathEnv: "/usr/bin", isExecutable: { _ in false }), String?.none)
+    },
+
+    TestCase("harness: claude registers MCP through its CLI with an explicit scope") {
+        let home = URL(fileURLWithPath: "/home")
+        let ws = URL(fileURLWithPath: "/ws")
+
+        // claude's default scope is `local` (private, cwd-bound), which matches
+        // neither of ours — it must always be passed explicitly.
+        try expectEqual(
+            SetupHarness.claude.mcpInstall(scope: .global, home: home, workspace: ws),
+            .cli(executable: "claude", arguments: ["mcp", "add", "seen", "-s", "user", "--", "seen", "mcp"])
+        )
+        try expectEqual(
+            SetupHarness.claude.mcpInstall(scope: .project, home: home, workspace: ws),
+            .cli(executable: "claude", arguments: ["mcp", "add", "seen", "-s", "project", "--", "seen", "mcp"])
+        )
+    },
+
+    TestCase("harness: codex registers MCP through its CLI and is global only") {
+        let home = URL(fileURLWithPath: "/home")
+        let ws = URL(fileURLWithPath: "/ws")
+
+        try expectEqual(
+            SetupHarness.codex.mcpInstall(scope: .global, home: home, workspace: ws),
+            .cli(executable: "codex", arguments: ["mcp", "add", "seen", "--", "seen", "mcp"])
+        )
+        try expectEqual(SetupHarness.codex.supports(.global), true)
+        try expectEqual(SetupHarness.codex.supports(.project), false)
+    },
+
+    TestCase("harness: cursor and antigravity share the JSON merge, differing only in path") {
+        let home = URL(fileURLWithPath: "/home")
+        let ws = URL(fileURLWithPath: "/ws")
+
+        try expectEqual(
+            SetupHarness.cursor.mcpInstall(scope: .global, home: home, workspace: ws),
+            .jsonMerge(URL(fileURLWithPath: "/home/.cursor/mcp.json"))
+        )
+        try expectEqual(
+            SetupHarness.cursor.mcpInstall(scope: .project, home: home, workspace: ws),
+            .jsonMerge(URL(fileURLWithPath: "/ws/.cursor/mcp.json"))
+        )
+        try expectEqual(
+            SetupHarness.antigravity.mcpInstall(scope: .global, home: home, workspace: ws),
+            .jsonMerge(URL(fileURLWithPath: "/home/.gemini/config/mcp_config.json"))
+        )
+        try expectEqual(
+            SetupHarness.antigravity.mcpInstall(scope: .project, home: home, workspace: ws),
+            .jsonMerge(URL(fileURLWithPath: "/ws/.agents/mcp_config.json"))
+        )
+    },
+
+    TestCase("harness: skill destinations match each harness layout") {
+        let home = URL(fileURLWithPath: "/home")
+        let ws = URL(fileURLWithPath: "/ws")
+
+        func dest(_ h: SetupHarness, _ s: SetupScope) -> String? {
+            h.skillDestination(scope: s, home: home, workspace: ws)?.path
+        }
+
+        try expectEqual(dest(.claude, .global), "/home/.claude/skills/seen/SKILL.md")
+        try expectEqual(dest(.claude, .project), "/ws/.claude/skills/seen/SKILL.md")
+        // Codex skills are $CODEX_HOME/skills/<name>, global regardless of scope.
+        try expectEqual(dest(.codex, .global), "/home/.codex/skills/seen/SKILL.md")
+        try expectEqual(dest(.antigravity, .global), "/home/.gemini/config/skills/seen/SKILL.md")
+        try expectEqual(dest(.antigravity, .project), "/ws/.agents/skills/seen/SKILL.md")
+        // Cursor has mcp.json and hooks.json but no skills directory.
+        try expectEqual(dest(.cursor, .global), String?.none)
+    },
+
+    TestCase("harness: every harness is reachable and names a scope") {
+        try expectEqual(SetupHarness.allCases.count, 4)
+        for h in SetupHarness.allCases {
+            try expectEqual(h.scopes.isEmpty, false)
+            try expectEqual(h.supports(.global), true)
+        }
     }
 ]

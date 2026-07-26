@@ -2,9 +2,9 @@
 
 **Let your CLI agent see your screen.**
 
-Seen is a macOS menu bar app that gives coding agents — Claude Code, Cursor,
-Codex, anything that speaks MCP — screenshots and on-screen text on demand. Ask
-"what's on my screen?" and the agent just looks.
+Seen is a macOS menu bar app that gives coding agents — Claude Code, Codex,
+Cursor, Antigravity, anything that speaks MCP — screenshots and on-screen text
+on demand. Ask "what's on my screen?" and the agent just looks.
 
 Requires macOS 15+.
 
@@ -38,23 +38,49 @@ seen health
 **4. Connect your agent**
 
 ```bash
-claude mcp add seen -- seen mcp
+seen setup claude
 ```
 
-Now ask Claude Code *"what's on my screen right now?"* — that's it.
-
-<details>
-<summary><b>Cursor, Codex, and other agents</b></summary>
-
-Cursor has no `mcp add` command, so Seen writes the config for you:
+One command per harness, and each one configures everything that harness
+supports — the MCP server plus the agent skill that teaches it when to look at
+your screen:
 
 ```bash
-seen setup cursor          # ~/.cursor/mcp.json (all projects)
-seen setup cursor --project  # .cursor/mcp.json (this project)
+seen setup claude        # Claude Code — MCP + skill
+seen setup codex         # Codex — MCP + skill
+seen setup cursor        # Cursor — MCP (Cursor has no skills directory)
+seen setup antigravity   # Antigravity — MCP + skill
 ```
 
-It merges into your existing config and leaves your other MCP servers alone.
-Restart Cursor afterwards. To do it by hand instead:
+Now ask your agent *"what's on my screen right now?"* — that's it.
+
+<details>
+<summary><b>Scopes, partial setup, and doing it by hand</b></summary>
+
+Setup writes machine-wide by default. `--project` scopes it to the directory
+you run it from:
+
+```bash
+seen setup claude --project   # this project only
+```
+
+Codex stores both its MCP servers and its skills globally, so it rejects
+`--project` rather than silently ignoring it.
+
+Narrow what gets installed with `--mcp-only` or `--skill-only`, and skip the
+overwrite prompt with `--yes`. Re-running a completed setup is a no-op that
+exits 0 — it reports each piece as already current rather than failing.
+
+| Harness | MCP config | Skill |
+|---|---|---|
+| Claude Code | `claude mcp add -s user\|project` | `~/.claude/skills/` · `./.claude/skills/` |
+| Codex | `codex mcp add` (global) | `~/.codex/skills/` |
+| Cursor | `~/.cursor/mcp.json` · `./.cursor/mcp.json` | — |
+| Antigravity | `~/.gemini/config/mcp_config.json` · `./.agents/mcp_config.json` | `~/.gemini/config/skills/` · `./.agents/skills/` |
+
+Seen merges into an existing config and leaves your other MCP servers alone. To
+register by hand instead — for these or any other MCP-capable agent — add
+`seen mcp` as a **stdio** server (command `seen`, argument `mcp`):
 
 ```json
 {
@@ -64,22 +90,7 @@ Restart Cursor afterwards. To do it by hand instead:
 }
 ```
 
-Any other MCP-capable agent: register `seen mcp` as a **stdio** server. The
-command is `seen`, the argument is `mcp`.
-</details>
-
-<details>
-<summary><b>Give Claude Code deeper instructions (optional)</b></summary>
-
-The repo ships an agent skill that teaches Claude Code when to look at your
-screen and how to choose between OCR text and images:
-
-```bash
-seen setup skill
-```
-
-It asks where to put it — for all your projects (`~/.claude/skills`) or just
-this one. Add `--yes` to skip the question. To do it by hand instead:
+And to install the skill by hand:
 
 ```bash
 mkdir -p ~/.claude/skills/seen
@@ -213,7 +224,7 @@ SeenKit/Coordinator capture→OCR→encode→store orchestration + event fan-out
 SeenKit/Sessions    interval sessions, hard caps enforced
 SeenKit/Server      HTTP codec, UDS server, router, API client, MCP handler
 SeenKit/Push        hotkey delivery: templates, tmux, clipboard
-SeenKit/Setup       `seen setup` logic: MCP-config merge, skill install
+SeenKit/Setup       `seen setup` logic: harness matrix, MCP merge, skill install
 SeenKit/AppCore     pure app logic: settings, icon state (headless-testable)
 SeenApp             SwiftUI menu bar shell + Settings + composition root
 seen-cli            `seen` CLI + `seen mcp` stdio shim

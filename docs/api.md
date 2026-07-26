@@ -123,7 +123,19 @@ simple parameters; the shim translates to the JSON target shape.
 
 In addition to the server endpoints, the `seen` binary provides local setup commands:
 
-- `seen setup claude`: Configures `claude` (Claude Code) by shelling out to its native `mcp add` command.
-- `seen setup cursor [--project] [--config <path>]`: Merges the `seen mcp` server configuration into Cursor's `mcp.json` config.
-- `seen setup skill [--dest <dir>] [--project] [--yes]`: Installs the Seen skill `SKILL.md` to `~/.claude/skills/seen/SKILL.md` or a specified directory, asking for confirmation if the file already exists and is not byte-identical.
+Setup is organised by *harness*, not by artifact: one subcommand per agent, each
+installing everything that harness supports.
+
+- `seen setup claude [--project] [--mcp-only] [--skill-only] [--yes]`: Registers the MCP server via `claude mcp add` (scope `user`, or `project` with `--project`) and installs `SKILL.md` to `~/.claude/skills/seen/` (or `./.claude/skills/seen/`).
+- `seen setup codex [--mcp-only] [--skill-only] [--yes]`: Registers the MCP server via `codex mcp add` and installs `SKILL.md` to `~/.codex/skills/seen/`. Global only — `--project` is rejected, since Codex stores both globally.
+- `seen setup cursor [--project] [--mcp-only] [--config <path>]`: Merges the `seen mcp` server into `~/.cursor/mcp.json` (or `./.cursor/mcp.json`). Cursor has no skills directory, so it declares neither `--skill-only` nor `--yes`, and the skill step reports as skipped.
+- `seen setup antigravity [--project] [--mcp-only] [--skill-only] [--yes] [--config <path>]`: Merges into `~/.gemini/config/mcp_config.json` (or `./.agents/mcp_config.json`) and installs `SKILL.md` to `~/.gemini/config/skills/seen/` (or `./.agents/skills/seen/`). Antigravity's config schema is identical to Cursor's, so both share one merge implementation.
+
+`--config <path>` overrides the destination for the file-based harnesses; the
+CLI-based ones (Claude Code, Codex) own their own config location.
+
+Every command reports each step independently and exits 0 when each is either
+applied or already current; a non-zero exit means a step genuinely failed. A
+skill file that exists and differs prompts before being overwritten unless
+`--yes` is passed.
 
