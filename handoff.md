@@ -37,7 +37,23 @@ Verified independently after the re-cut run, not taken on trust:
   0.1.3, SwiftUI discriminator **1 for the app / 0 for the CLI** (so the two
   executables are distinct — no overwrite), `SKILL.md` present in
   `Contents/Resources/seen-skill/`.
-- `brew info --cask execsumo/tap/seen` → 0.1.3.
+- The tap's `Casks/seen.rb` carries sha256 `f16ff59c…3c44` (fetched over raw
+  githubusercontent, not read from a local checkout).
+
+**Do not use `brew info --cask execsumo/tap/seen` → 0.1.3 as a release check.**
+It reads the cask's version string, which an overwrite never changes, so it
+returns 0.1.3 for the old and new bits alike. It passed on this machine while
+the machine was still on the *pre*-re-cut build. The checks that discriminate:
+
+```sh
+shasum -a 256 ~/Library/Caches/Homebrew/downloads/*Seen-0.1.3.dmg   # want f16ff59c…
+seen setup --help | grep -c antigravity                             # want 1, not 0
+```
+
+Because the version is unchanged, `brew upgrade` is a no-op here and a bare
+`brew reinstall` hits a SHA256 mismatch against the stale cached DMG. Recovery
+is: delete the cached download, then `brew uninstall --cask` and
+`brew install --cask`.
 
 **This run also proved the `build/` untracking is safe.** `be9baee` removed
 `build/Seen.app` from git (it had been committed by accident in `a31e99c`), and
