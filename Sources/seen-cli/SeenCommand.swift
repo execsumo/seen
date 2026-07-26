@@ -261,8 +261,24 @@ struct Setup: AsyncParsableCommand {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: execPath)
             p.arguments = SetupClaude.arguments
+
+            // Foundation spawns the child into its own process group, so a child
+            // that touches the inherited terminal is SIGTTIN/SIGTTOU'd into a
+            // stopped state and waitUntilExit() blocks forever. claude does that.
+            // Hand it no terminal at all: null stdin, one pipe for both outputs.
+            let pipe = Pipe()
+            p.standardInput = FileHandle.nullDevice
+            p.standardOutput = pipe
+            p.standardError = pipe
             try p.run()
+            // Drain before waiting — waiting first deadlocks once the pipe fills.
+            let out = pipe.fileHandleForReading.readDataToEndOfFile()
             p.waitUntilExit()
+
+            let text = String(data: out, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !text.isEmpty { print(text) }
+
             if p.terminationStatus != 0 {
                 print("claude mcp add exited with status \(p.terminationStatus) (see its output above).")
                 throw ExitCode(p.terminationStatus)

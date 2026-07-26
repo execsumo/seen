@@ -530,8 +530,13 @@ skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
   instead of inventing paths.
 - **`seen setup claude`** — shells out to `claude mcp add seen -- seen mcp`.
   Prints the manual command and exits non-zero if `claude` isn't on `PATH`;
-  passes claude's own output through and adds one Seen-level line on a non-zero
+  prints claude's captured output and adds one Seen-level line on a non-zero
   exit so a duplicate-add doesn't read as Seen breaking.
+  **The child must get no terminal** — null stdin, one `Pipe` for stdout+stderr,
+  drained *before* `waitUntilExit()`. Foundation's `Process` spawns into a new
+  process group, so an inherited tty gets the child SIGTTIN/SIGTTOU'd into `T`
+  (stopped) forever and the parent's wait never returns. That shipped in v0.1.3
+  as a total hang of `seen setup claude` with zero output; fixed 2026-07-25.
 - **`bundle.sh`** copies `.claude/skills/seen/SKILL.md` to
   `Contents/Resources/seen-skill/SKILL.md` with a `cmp` guard, matching the two
   binary guards. Single source of truth kept: the repo file.
@@ -543,6 +548,10 @@ skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
   through a symlink; malformed-config refusal with the file left byte-identical;
   no-TTY exiting fast; and `setup claude` driven by a fake `claude` earlier on
   `PATH` so the real `~/.claude.json` is never touched.
+  The fake `claude` must **read stdin and call `stty`**, and the whole thing must
+  run under a real pty (`pty.fork`, not this shell's pipe-only stdio) — a fake
+  that just prints and exits is what let the v0.1.3 hang through, because with no
+  tty and nothing reading it there is no signal to stop the child.
 
 ## Known rough edges / next work
 
