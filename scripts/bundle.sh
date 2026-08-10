@@ -131,8 +131,16 @@ cat > "$APP_BUNDLE/Contents/Resources/Seen.entitlements" <<EOF
 EOF
 
 if [[ -z "$SIGN_IDENTITY" ]]; then
-    if security find-identity -v -p codesigning | grep -q '"Developer ID Application: Herwin Gill"'; then
-        SIGN_IDENTITY="Developer ID Application: Herwin Gill (577WHA43TF)"
+    # `security find-identity` prints the team ID inside the quotes (e.g.
+    # `"Developer ID Application: Herwin Gill (577WHA43TF)"`), so match on the
+    # prefix and extract the full quoted name instead of hardcoding it — a
+    # hardcoded exact match never fires because the closing quote never lands
+    # right after "Herwin Gill".
+    DETECTED_IDENTITY="$(security find-identity -v -p codesigning \
+        | grep -o '"Developer ID Application: Herwin Gill[^"]*"' \
+        | head -1 | tr -d '"')"
+    if [[ -n "$DETECTED_IDENTITY" ]]; then
+        SIGN_IDENTITY="$DETECTED_IDENTITY"
     elif security find-identity -v -p codesigning | grep -q '"Dev Cert"'; then
         SIGN_IDENTITY="Dev Cert"
     fi

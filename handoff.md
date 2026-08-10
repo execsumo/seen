@@ -647,14 +647,17 @@ skill's `.jpg` default drifted from the PNG switch until 2026-07-25.
   `dmg.sh` run without `--api-key-path` (CI passes the API key, so `NOTARY_AUTH`
   takes the other branch). Note the rename doesn't create the profile: a local
   notarizing run needs `xcrun notarytool store-credentials seen-notary` first.
-- **`bundle.sh:134`'s Developer ID auto-detect is dead code.** It greps for
+- ~~**`bundle.sh:134`'s Developer ID auto-detect is dead code.**~~ Fixed
+  2026-08-10: it grepped for the literal
   `'"Developer ID Application: Herwin Gill"'`, but `security find-identity`
   prints `"Developer ID Application: Herwin Gill (577WHA43TF)"` — the closing
-  quote can't match, so the branch never fires and auto-detect always falls
-  through to `Dev Cert`. Harmless for releases (the workflow passes `--sign`
-  explicitly) but the fallback doesn't do what it claims. **Fixing it flips the
-  local signing identity, which resets the Screen Recording grant** — do it
-  deliberately, not in the middle of a TCC walkthrough.
+  quote can't match, so the branch never fired and auto-detect always fell
+  through to `Dev Cert`. Now it greps on the prefix and extracts the full
+  quoted name with `grep -o … | tr -d '"'` instead of hardcoding the team ID,
+  so it survives a cert renewal too. Harmless for releases (the workflow
+  passes `--sign` explicitly). **Not yet exercised on a real Mac — fixing it
+  flips the local signing identity, which resets the Screen Recording grant.**
+  Verify deliberately, not in the middle of a TCC walkthrough.
 - **`Seen.version` is hand-maintained** (`Sources/SeenKit/Domain/Seen.swift`) —
   bump it when cutting a release or `/health` and MCP `serverInfo` report a
   stale version, as they did through v0.1.1 and v0.1.2.
