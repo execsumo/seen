@@ -70,6 +70,37 @@ does not exist, so it has never been type-checked, linked, or rendered.
 - An intra-module check confirms all 45 `SeenTheme`/`SeenType`/`SeenFonts`
   member references resolve and all 62 call sites of the 24 in-module
   components match their synthesised memberwise initialisers.
+- `./scripts/bundle.sh --no-install` builds and signs clean with the Developer
+  ID identity, and `Seen.app/Contents/Resources/Fonts/` contains all four
+  JetBrainsMono TTFs plus OFL.txt. The bundle launches and runs.
+- `swift scripts/FontCheck.swift build/Seen.app` verifies headlessly that the
+  bundled family actually registers and resolves — run it after any change to
+  the font pipeline.
+
+**Not verified: how it looks**
+
+Nothing has laid eyes on the rendered UI. Automated GUI walkthrough needs
+Accessibility access, which is deliberately not granted, so this is a human
+click-through. Build it (`./scripts/bundle.sh --no-install`, then launch
+`build/Seen.app` — note it shares a bundle ID with the installed copy, so quit
+`/Applications/Seen.app` first or you will have two identical menu-bar icons)
+and check:
+
+1. **Typeface.** Is it JetBrains Mono or did it silently fall back to SF Mono?
+   JetBrains Mono has a slab-serifed `l`, a dotted zero, and a taller x-height.
+   `scripts/FontCheck.swift` answers this mechanically if in doubt.
+2. **Clipping.** Every window was sized by arithmetic against a 0.6em advance,
+   never by looking. The tightest spots, in order: the onboarding two-button
+   row, the Hotkey pane's key-chip row beside the Record button, and the
+   Permissions row's trailing tag + button column.
+3. **Shape and ground.** Everything square-cornered, 1px borders visible against
+   the near-black ground, no stray rounded corner or light-mode surface — the
+   folder picker and the Capture App submenu are AppKit-drawn and are the
+   likeliest to ignore the theme.
+4. **Amber.** `#FFB46E` should read as the primary action colour: filled
+   buttons, the selected segmented cell, sidebar selection rule, row hover.
+5. **Motion.** The Hotkey pane's block cursor should blink while recording, and
+   the menu-bar status square should pulse during an interval session.
 
 ## Non-blocking caveats
 
