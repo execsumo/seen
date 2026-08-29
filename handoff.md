@@ -79,27 +79,50 @@ does not exist, so it has never been type-checked, linked, or rendered.
   Bold, not one face synthesised four ways), and i/W/0/l all advance 60.0pt at
   100pt — exactly 0.6em. Re-run it after any change to the font pipeline.
 
-**Not verified: how it looks**
+**Verified visually — the design system**
 
-Nothing has laid eyes on the rendered UI. Automated GUI walkthrough needs
-Accessibility access, which is deliberately not granted, so this is a human
+`scripts/DesignProof.swift` was rendered on macOS (1960x2658 @2x) and the image
+inspected. Confirmed against `DESIGN.md`:
+
+- Type is genuinely JetBrains Mono — the dotted zero and slab-serifed `l` are
+  visible — across all six named steps, each clearly distinct.
+- Near-black ground throughout. Every corner square; no rounded shape, no
+  capsule, no shadow, nothing rendering in light mode.
+- 1px borders read clearly against the ground and carry the hierarchy, with the
+  tonal ladder (base / sunken / elevated / raised / high) legible as depth.
+- Amber `#FFB46E` reads as the primary action colour: the filled button with
+  near-black `#4B2800` text, the selected segmented cell, the accented menu row,
+  the app mark. The secondary button is a 1px border with no fill, as specified.
+- The code block renders green `$` and blue path on the sunken ground; the
+  `> ` marker replaces the icon bullet; status tags are sharp tinted boxes.
+
+**Known behaviour: ligatures are on.** JetBrains Mono ships programming
+ligatures and they are enabled by default, which suits the spec's stated "IDE
+aesthetic" but means `CommandLineText` renders a path containing `->`, `!=`, or
+`<=` as a ligature glyph rather than the literal characters. Left as-is
+deliberately; if literal fidelity matters more than the IDE look for that one
+component, build its font from an `NSFontDescriptor` with common ligatures
+disabled rather than turning them off system-wide.
+
+**Not verified: the composed screens**
+
+The proof sheet covers the design system, not how `MenuContent`, `SettingsView`,
+and `OnboardingView` arrange it. Walking those needs Accessibility access, which
+is the user's call and was deliberately not granted, so this stays a human
 click-through. Build it (`./scripts/bundle.sh --no-install`, then launch
-`build/Seen.app` — note it shares a bundle ID with the installed copy, so quit
-`/Applications/Seen.app` first or you will have two identical menu-bar icons)
-and check:
+`build/Seen.app` — it shares a bundle ID with the installed copy, so quit
+`/Applications/Seen.app` first or you will have two identical menu-bar icons):
 
 1. **Clipping.** Every window was sized by arithmetic against a 0.6em advance,
    never by looking. The tightest spots, in order: the onboarding two-button
    row, the Hotkey pane's key-chip row beside the Record button, and the
    Permissions row's trailing tag + button column.
-2. **Shape and ground.** Everything square-cornered, 1px borders visible against
-   the near-black ground, no stray rounded corner or light-mode surface — the
-   folder picker and the Capture App submenu are AppKit-drawn and are the
-   likeliest to ignore the theme.
-3. **Amber.** `#FFB46E` should read as the primary action colour: filled
-   buttons, the selected segmented cell, sidebar selection rule, row hover.
-4. **Motion.** The Hotkey pane's block cursor should blink while recording, and
-   the menu-bar status square should pulse during an interval session.
+2. **AppKit-drawn surfaces.** The folder picker and the Capture App submenu are
+   drawn by AppKit, not by this design system, and are the likeliest to ignore
+   the pinned dark appearance.
+3. **Motion.** The Hotkey pane's block cursor should blink while recording, and
+   the menu-bar status square should pulse during an interval session — neither
+   animates in a still render.
 
 ## Non-blocking caveats
 
