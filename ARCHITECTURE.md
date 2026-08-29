@@ -209,9 +209,21 @@ seen open                             # open screenshots folder
 ## 5. Menu bar UI & state
 
 Rebuilt 2026-07-08 as a human-facing surface (agents use the API/MCP/CLI, never
-this) using Heard's "Paper" design language — see `SeenApp/DesignSystem.swift`.
+this); restyled 2026-08-29 to the "High-Performance Terminal" design language
+specified in `DESIGN.md` — see `SeenApp/DesignSystem.swift` for the token,
+type, and component implementation.
 
-- `MenuBarExtra` with **`.menuBarExtraStyle(.window)`** (a real Paper panel, not
+- The design system is **dark-only and sharp-cornered**: one palette anchored on
+  `#08080B`, containers at `#121217` with 1px `#1C1C22` borders, amber
+  (`#FFB46E`) for primary actions, and 0px radii everywhere. Depth is tonal, not
+  shadowed — no `.shadow` is used in the app. `NSApplication.appearance` is
+  pinned to `.darkAqua` so AppKit-drawn surfaces match.
+- Typography is **JetBrains Mono, exclusively**. The Regular/Medium/SemiBold/Bold
+  faces ship in `Contents/Resources/Fonts` (OFL, copied by `scripts/bundle.sh`)
+  and are registered at launch with `CTFontManagerRegisterFontsForURL`; if the
+  faces are missing, `SeenFonts` falls back to the system monospace face rather
+  than a proportional one.
+- `MenuBarExtra` with **`.menuBarExtraStyle(.window)`** (a real styled panel, not
   a native menu). Template icon in three states: **idle** (`eye`), **recent
   capture** (`eye.fill` flash, ~3 s), **interval session active**
   (`eye.circle.fill`, persists while any session runs).

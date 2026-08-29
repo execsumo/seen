@@ -1,10 +1,23 @@
 import SwiftUI
+import AppKit
 import SeenKit
 
 @main
 struct SeenAppMain: App {
     @StateObject private var composition = Composition()
-    
+
+    init() {
+        // DESIGN.md ships one palette, anchored on a near-black ground. Pinning
+        // the whole process to dark keeps AppKit-drawn surfaces the app doesn't
+        // style itself — submenus, the folder picker — on the same ground as the
+        // SwiftUI chrome.
+        NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+
+        // Register the bundled JetBrains Mono faces before the first view body
+        // resolves a font, so nothing renders a frame in the fallback face.
+        _ = SeenFonts.isAvailable
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MenuContent()
@@ -22,7 +35,7 @@ struct SeenAppMain: App {
                 .environmentObject(composition)
         }
         .windowResizability(.contentSize)
-        
+
         WindowGroup("Permissions", id: "onboarding") {
             OnboardingView()
                 .environmentObject(composition)

@@ -15,84 +15,75 @@ public struct OnboardingView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Paper header
-            VStack(spacing: 12) {
+            // Hero: flat tonal layer, no gradient, no shadow.
+            VStack(spacing: SeenTheme.Spacing.md) {
                 SeenMark(size: 56)
                 Text("Seen sees your screen for your agents.")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(SeenTheme.Paper.ink)
+                    .seenType(SeenType.bodyMD.weighted(.semibold))
+                    .foregroundStyle(SeenTheme.Term.ink)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text("It needs Screen Recording permission to capture displays, windows, and apps.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(SeenTheme.Paper.mute)
+                    .seenType(SeenType.caption)
+                    .foregroundStyle(SeenTheme.Term.mute)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: 380)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 28)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 20)
+            .padding(.top, SeenTheme.Spacing.xl)
+            .padding(.horizontal, SeenTheme.Spacing.lg)
+            .padding(.bottom, SeenTheme.Spacing.lg)
             .frame(maxWidth: .infinity)
-            .background(
-                LinearGradient(colors: [SeenTheme.Paper.surface, SeenTheme.Paper.sidebar],
-                               startPoint: .top, endPoint: .bottom)
-            )
+            .background(SeenTheme.Term.elevated)
 
-            SeenTheme.Paper.border.frame(height: 0.5)
+            HRule()
 
-            VStack(spacing: 14) {
+            VStack(spacing: SeenTheme.Spacing.md) {
                 SettingsCard {
                     CardRow(isLast: true) {
-                        HStack(spacing: 12) {
+                        HStack(spacing: SeenTheme.Spacing.md) {
                             ZStack {
-                                RoundedRectangle(cornerRadius: 7)
-                                    .fill(granted ? SeenTheme.Paper.goodSoft : SeenTheme.Paper.accentSoft)
+                                Rectangle()
+                                    .fill((granted ? SeenTheme.Term.good : SeenTheme.Term.amber).opacity(0.12))
                                     .frame(width: 32, height: 32)
+                                    .terminalBorder((granted ? SeenTheme.Term.good : SeenTheme.Term.amber).opacity(0.45))
                                 Image(systemName: granted ? "checkmark" : "rectangle.dashed.badge.record")
                                     .font(.system(size: 15))
-                                    .foregroundStyle(granted ? SeenTheme.Paper.good : SeenTheme.Paper.accent)
+                                    .foregroundStyle(granted ? SeenTheme.Term.good : SeenTheme.Term.amber)
                             }
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: SeenTheme.Spacing.hair) {
                                 Text("Screen Recording")
-                                    .font(.system(size: 12.5, weight: .medium))
-                                    .foregroundStyle(SeenTheme.Paper.ink)
+                                    .seenType(SeenType.bodySM.weighted(.medium))
+                                    .foregroundStyle(SeenTheme.Term.ink)
                                 Text(granted ? "Granted — you're all set." : "Required to capture your screen.")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(SeenTheme.Paper.mute)
+                                    .seenType(SeenType.caption)
+                                    .foregroundStyle(SeenTheme.Term.mute)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                            Spacer()
-                            StatusPill(text: phase == .granted ? "Granted" : (phase == .requestedPendingRestart ? "Restart Needed" : "Needed"),
-                                       fg: granted ? SeenTheme.Paper.good : SeenTheme.Paper.bad,
-                                       bg: granted ? SeenTheme.Paper.goodSoft : SeenTheme.Paper.badSoft)
+                            Spacer(minLength: SeenTheme.Spacing.sm)
+                            StatusTag(text: phase == .granted ? "Granted" : (phase == .requestedPendingRestart ? "Restart needed" : "Needed"),
+                                      color: granted ? SeenTheme.Term.good : SeenTheme.Term.bad)
                         }
                     }
                 }
 
                 if phase == .granted {
-                    Text("You can close this window — Seen lives in your menu bar.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(SeenTheme.Paper.mute)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                    note("You can close this window — Seen lives in your menu bar.")
                 } else if phase == .requestedPendingRestart {
-                    Text("If you've already allowed Seen in System Settings, it needs to restart before it can see your screen.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(SeenTheme.Paper.mute)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                    note("If you've already allowed Seen in System Settings, it needs to restart before it can see your screen.")
                 } else {
-                    Text("Seen needs permission to work. You can always change this in System Settings.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(SeenTheme.Paper.mute)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                    note("Seen needs permission to work. You can always change this in System Settings.")
                 }
-                
+
                 if !granted {
-                    HStack(spacing: 10) {
+                    HStack(spacing: SeenTheme.Spacing.md) {
                         Button("Open System Settings") {
                             composition.appState.markPermissionRequested()
                             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
                                 NSWorkspace.shared.open(url)
                             }
                         }
-                        .buttonStyle(PaperSecondaryButtonStyle())
+                        .buttonStyle(TerminalSecondaryButtonStyle())
                         .fixedSize()
 
                         if phase == .requestedPendingRestart {
@@ -104,32 +95,47 @@ public struct OnboardingView: View {
                                     relaunchFailed = true
                                 }
                             }
-                            .buttonStyle(PaperPrimaryButtonStyle())
+                            .buttonStyle(TerminalPrimaryButtonStyle(fillWidth: false))
                             .disabled(didTapRestart)
                         } else {
                             Button("Grant Permission") {
                                 _ = CGRequestScreenCaptureAccess()
                                 composition.appState.markPermissionRequested()
                             }
-                            .buttonStyle(PaperPrimaryButtonStyle())
+                            .buttonStyle(TerminalPrimaryButtonStyle(fillWidth: false))
                         }
                     }
 
                     if relaunchFailed {
-                        Text("Couldn't restart automatically — please quit Seen and open it again.")
-                            .font(.system(size: 11))
-                            .foregroundStyle(SeenTheme.Paper.bad)
-                            .frame(maxWidth: .infinity, alignment: .center)
+                        HStack(alignment: .top, spacing: SeenTheme.Spacing.sm) {
+                            Marker(glyph: "!", color: SeenTheme.Term.bad)
+                            Text("Couldn't restart automatically — please quit Seen and open it again.")
+                                .seenType(SeenType.caption)
+                                .foregroundStyle(SeenTheme.Term.bad)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
                 Spacer()
             }
-            .padding(20)
+            .padding(SeenTheme.Spacing.lg)
         }
-        .frame(width: 420, height: 340)
-        .background(SeenTheme.Paper.bg)
+        .frame(width: 480, height: 440)
+        .background(SeenTheme.Term.base)
+        .preferredColorScheme(.dark)
         .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
             composition.appState.recheckPermission()
+        }
+    }
+
+    private func note(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: SeenTheme.Spacing.sm) {
+            Marker(color: SeenTheme.Term.dim)
+            Text(text)
+                .seenType(SeenType.caption)
+                .foregroundStyle(SeenTheme.Term.mute)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
     }
 }

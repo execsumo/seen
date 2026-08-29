@@ -38,43 +38,43 @@ public struct SettingsView: View {
             sidebar
             detail
         }
-        .frame(width: 660, height: 480)
-        .background(SeenTheme.Paper.bg)
+        .frame(width: 720, height: 540)
+        .background(SeenTheme.Term.base)
+        .preferredColorScheme(.dark)
     }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                SeenMark(size: 26)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Seen")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(SeenTheme.Paper.ink)
+            HStack(spacing: SeenTheme.Spacing.sm + 2) {
+                SeenMark(size: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SEEN")
+                        .seenType(SeenType.bodyMD.weighted(.bold))
+                        .tracking(1.2)
+                        .foregroundStyle(SeenTheme.Term.ink)
                     Text(appVersion)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(SeenTheme.Paper.mute)
+                        .seenType(SeenType.caption)
+                        .foregroundStyle(SeenTheme.Term.dim)
                 }
-                Spacer()
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+            .padding(.horizontal, SeenTheme.Spacing.md)
+            .padding(.vertical, SeenTheme.Spacing.md)
 
-            SeenTheme.Paper.border.frame(height: 0.5)
+            HRule()
 
-            VStack(spacing: 2) {
+            VStack(spacing: 0) {
                 ForEach(SettingsTab.allCases) { item in
                     sidebarItem(item)
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.top, 8)
+            .padding(.top, SeenTheme.Spacing.sm)
 
             Spacer()
         }
-        .frame(width: 184)
-        .background(SeenTheme.Paper.sidebar)
-        .overlay(alignment: .trailing) { SeenTheme.Paper.border.frame(width: 0.5) }
+        .frame(width: 200)
+        .background(SeenTheme.Term.elevated)
+        .overlay(alignment: .trailing) { SeenTheme.Term.border.frame(width: SeenTheme.hairline) }
     }
 
     private func sidebarItem(_ item: SettingsTab) -> some View {
@@ -82,26 +82,27 @@ public struct SettingsView: View {
         return Button {
             tab = item
         } label: {
-            HStack(spacing: 9) {
+            HStack(spacing: SeenTheme.Spacing.sm) {
                 Image(systemName: item.icon)
                     .font(.system(size: 13))
-                    .foregroundStyle(selected ? SeenTheme.Paper.accent : SeenTheme.Paper.ink2)
-                    .frame(width: 18, alignment: .center)
+                    .foregroundStyle(selected ? SeenTheme.Term.amber : SeenTheme.Term.mute)
+                    .frame(width: 16, alignment: .center)
                 Text(item.label)
-                    .font(.system(size: 12.5, weight: selected ? .semibold : .medium))
-                    .foregroundStyle(selected ? SeenTheme.Paper.ink : SeenTheme.Paper.ink2)
-                Spacer()
+                    .seenType(SeenType.bodySM.weighted(selected ? .semibold : .regular))
+                    .foregroundStyle(selected ? SeenTheme.Term.ink : SeenTheme.Term.body)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background {
-                if selected {
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(SeenTheme.Paper.surface)
-                        .shadow(color: SeenTheme.cardShadow, radius: 1, x: 0, y: 1)
-                        .overlay(RoundedRectangle(cornerRadius: 7).stroke(SeenTheme.Paper.border, lineWidth: 0.5))
-                }
+            .padding(.horizontal, SeenTheme.Spacing.md)
+            .padding(.vertical, SeenTheme.Spacing.sm + 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(selected ? SeenTheme.Term.raised : Color.clear)
+            // Selection is marked with a structural amber rule, not a fill shape.
+            .overlay(alignment: .leading) {
+                SeenTheme.Term.amber
+                    .frame(width: 2)
+                    .opacity(selected ? 1 : 0)
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -137,21 +138,23 @@ private struct Pane<Content: View>: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: SeenTheme.Spacing.md) {
+                VStack(alignment: .leading, spacing: SeenTheme.Spacing.sm) {
                     Text(title)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundStyle(SeenTheme.Paper.ink)
+                        .seenType(SeenType.headlineMD)
+                        .foregroundStyle(SeenTheme.Term.ink)
                     if let subtitle {
                         Text(subtitle)
-                            .font(.system(size: 12))
-                            .foregroundStyle(SeenTheme.Paper.mute)
+                            .seenType(SeenType.caption)
+                            .foregroundStyle(SeenTheme.Term.mute)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .padding(.bottom, SeenTheme.Spacing.sm)
+
                 content
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
+            .padding(SeenTheme.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -165,18 +168,19 @@ private struct FieldRow<Trailing: View>: View {
 
     var body: some View {
         CardRow(isLast: isLast) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: SeenTheme.Spacing.md) {
+                VStack(alignment: .leading, spacing: SeenTheme.Spacing.hair) {
                     Text(title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(SeenTheme.Paper.ink)
+                        .seenType(SeenType.bodySM.weighted(.medium))
+                        .foregroundStyle(SeenTheme.Term.ink)
                     if let subtitle {
                         Text(subtitle)
-                            .font(.system(size: 11))
-                            .foregroundStyle(SeenTheme.Paper.mute)
+                            .seenType(SeenType.caption)
+                            .foregroundStyle(SeenTheme.Term.mute)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: SeenTheme.Spacing.sm)
                 trailing
             }
         }
@@ -193,27 +197,33 @@ private struct GeneralPane: View {
         @Bindable var settings = composition.settings
 
         Pane("General", subtitle: "Where screenshots are saved.") {
-            SectionLabel(text: "Screenshots folder")
-            SettingsCard {
+            SettingsCard(title: "Screenshots folder") {
                 FieldRow(title: "Save location",
-                         subtitle: settings.saveDirectoryPath,
-                         isLast: true) {
+                         subtitle: "Every capture lands here, named by timestamp.") {
                     Button("Choose…") { showImporter = true }
-                        .buttonStyle(PaperSecondaryButtonStyle())
+                        .buttonStyle(TerminalSecondaryButtonStyle())
+                }
+                CardRow(isLast: true) {
+                    HStack {
+                        Text(settings.saveDirectoryPath)
+                            .seenType(SeenType.code.sized(12))
+                            .foregroundStyle(SeenTheme.Term.dim)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, SeenTheme.Spacing.md - 4)
+                    .padding(.vertical, SeenTheme.Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(SeenTheme.Term.sunken)
+                    .terminalBorder()
                 }
             }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.folder]) { result in
                 if let url = try? result.get() { settings.saveDirectoryPath = url.path }
             }
 
-            infoNote("Captures are encoded for Claude's vision automatically — PNG at 1568 px on the longest edge. PNG keeps on-screen text sharp at no extra token cost, and OCR always runs on the full-resolution frame first. Agents can override format (e.g. JPEG for a smaller payload), quality, and size per request via the API.")
-        }
-    }
-
-    private func infoNote(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(SeenTheme.Paper.mute)
-            Text(text).font(.system(size: 11)).foregroundStyle(SeenTheme.Paper.mute)
+            InfoNote(text: "Captures are encoded for Claude's vision automatically — PNG at 1568 px on the longest edge. PNG keeps on-screen text sharp at no extra token cost, and OCR always runs on the full-resolution frame first. Agents can override format (e.g. JPEG for a smaller payload), quality, and size per request via the API.")
         }
     }
 }
@@ -227,23 +237,23 @@ private struct HotkeyPane: View {
 
     var body: some View {
         Pane("Hotkey", subtitle: "Press this shortcut anywhere to capture your screen and push it to your agent.") {
-            SectionLabel(text: "Capture & push")
-            SettingsCard {
+            SettingsCard(title: "Capture & push") {
                 CardRow(isLast: true) {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: SeenTheme.Spacing.md) {
+                        VStack(alignment: .leading, spacing: SeenTheme.Spacing.hair) {
                             Text("Global shortcut")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(SeenTheme.Paper.ink)
+                                .seenType(SeenType.bodySM.weighted(.medium))
+                                .foregroundStyle(SeenTheme.Term.ink)
                             Text(recording ? "Press a key combination…" : "Sends a capture to your configured destination.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(recording ? SeenTheme.Paper.accent : SeenTheme.Paper.mute)
+                                .seenType(SeenType.caption)
+                                .foregroundStyle(recording ? SeenTheme.Term.amber : SeenTheme.Term.mute)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Spacer(minLength: 8)
+                        Spacer(minLength: SeenTheme.Spacing.sm)
                         if recording {
-                            Text("Recording…")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(SeenTheme.Paper.accent)
+                            // The command-line focus metaphor: a blinking block
+                            // cursor waiting on input.
+                            BlockCursor()
                         } else {
                             KeyChipRow(keyCode: composition.settings.hotkeyCode,
                                        carbonModifiers: composition.settings.hotkeyModifiers)
@@ -251,19 +261,12 @@ private struct HotkeyPane: View {
                         Button(recording ? "Cancel" : "Record") {
                             recording ? stop() : start()
                         }
-                        .buttonStyle(PaperSecondaryButtonStyle())
+                        .buttonStyle(TerminalSecondaryButtonStyle())
                     }
                 }
             }
 
-            HStack(spacing: 6) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 11))
-                    .foregroundStyle(SeenTheme.Paper.mute)
-                Text("Use at least one modifier (⌃ ⌥ ⇧ ⌘) so the shortcut doesn't collide with typing.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(SeenTheme.Paper.mute)
-            }
+            InfoNote(text: "Use at least one modifier (⌃ ⌥ ⇧ ⌘) so the shortcut doesn't collide with typing.")
         }
         .onDisappear(perform: stop)
     }
@@ -297,28 +300,23 @@ private struct DestinationPane: View {
         @Bindable var settings = composition.settings
 
         Pane("Destination", subtitle: "What the hotkey and menu put on your clipboard. Agents pick their own output per request via the API.") {
-            SectionLabel(text: "Include")
-            SettingsCard {
+            SettingsCard(title: "Include") {
                 CardRow(isLast: true) {
-                    Picker("", selection: Binding(
-                        get: { settings.captureOutput },
-                        set: { settings.captureOutput = $0 })) {
-                        Text("Image + text").tag(CaptureRequest.Output.both)
-                        Text("Image only").tag(CaptureRequest.Output.image)
-                        Text("Text only").tag(CaptureRequest.Output.text)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    TerminalSegmented(
+                        options: [
+                            (label: "Image + text", value: CaptureRequest.Output.both),
+                            (label: "Image only",   value: CaptureRequest.Output.image),
+                            (label: "Text only",    value: CaptureRequest.Output.text),
+                        ],
+                        selection: Binding(
+                            get: { settings.captureOutput },
+                            set: { settings.captureOutput = $0 }
+                        )
+                    )
                 }
             }
-            infoNote("The hotkey and menu copy the capture's file path — and its OCR text — to the clipboard, so you can paste it into any agent session. Copying spawns nothing under Seen, so a capture never drags a child process's permission prompts onto the app. “Text only” copies just the OCR; the image file is still saved to disk either way.")
-        }
-    }
 
-    private func infoNote(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "info.circle").font(.system(size: 11)).foregroundStyle(SeenTheme.Paper.mute)
-            Text(text).font(.system(size: 11)).foregroundStyle(SeenTheme.Paper.mute)
+            InfoNote(text: "The hotkey and menu copy the capture's file path — and its OCR text — to the clipboard, so you can paste it into any agent session. Copying spawns nothing under Seen, so a capture never drags a child process's permission prompts onto the app. “Text only” copies just the OCR; the image file is still saved to disk either way.")
         }
     }
 }
@@ -329,39 +327,38 @@ private struct PermissionsPane: View {
     @EnvironmentObject var composition: Composition
     @State private var didTapRestart = false
     @State private var relaunchFailed = false
-    
+
     private var phase: PermissionPhase { composition.appState.permissionPhase }
     private var granted: Bool { phase == .granted }
 
     var body: some View {
         Pane("Permissions", subtitle: "Seen needs one permission — Screen Recording — to see anything.") {
-            SettingsCard {
+            SettingsCard(title: "Required") {
                 CardRow(isLast: true) {
-                    HStack(spacing: 12) {
+                    HStack(alignment: .top, spacing: SeenTheme.Spacing.md) {
                         ZStack {
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(granted ? SeenTheme.Paper.goodSoft : SeenTheme.Paper.accentSoft)
-                                .frame(width: 30, height: 30)
+                            Rectangle()
+                                .fill(granted ? SeenTheme.Term.good.opacity(0.12)
+                                              : SeenTheme.Term.amber.opacity(0.12))
+                                .frame(width: 32, height: 32)
+                                .terminalBorder((granted ? SeenTheme.Term.good : SeenTheme.Term.amber).opacity(0.45))
                             Image(systemName: "rectangle.dashed.badge.record")
                                 .font(.system(size: 14))
-                                .foregroundStyle(granted ? SeenTheme.Paper.good : SeenTheme.Paper.accent)
+                                .foregroundStyle(granted ? SeenTheme.Term.good : SeenTheme.Term.amber)
                         }
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text("Screen Recording")
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(SeenTheme.Paper.ink)
-                                StatusPill(text: "Required", fg: SeenTheme.Paper.bad, bg: SeenTheme.Paper.badSoft)
-                            }
+                        VStack(alignment: .leading, spacing: SeenTheme.Spacing.hair) {
+                            Text("Screen Recording")
+                                .seenType(SeenType.bodySM.weighted(.medium))
+                                .foregroundStyle(SeenTheme.Term.ink)
                             Text("Lets Seen capture your displays, windows, and apps.")
-                                .font(.system(size: 11))
-                                .foregroundStyle(SeenTheme.Paper.mute)
+                                .seenType(SeenType.caption)
+                                .foregroundStyle(SeenTheme.Term.mute)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Spacer()
-                        VStack(alignment: .trailing, spacing: 6) {
-                            StatusPill(text: phase == .granted ? "Granted" : (phase == .requestedPendingRestart ? "Restart Needed" : "Not granted"),
-                                       fg: granted ? SeenTheme.Paper.good : SeenTheme.Paper.bad,
-                                       bg: granted ? SeenTheme.Paper.goodSoft : SeenTheme.Paper.badSoft)
+                        Spacer(minLength: SeenTheme.Spacing.sm)
+                        VStack(alignment: .trailing, spacing: SeenTheme.Spacing.sm) {
+                            StatusTag(text: phase == .granted ? "Granted" : (phase == .requestedPendingRestart ? "Restart needed" : "Not granted"),
+                                      color: granted ? SeenTheme.Term.good : SeenTheme.Term.bad)
                             if !granted {
                                 if phase == .requestedPendingRestart {
                                     Button(didTapRestart ? "Restarting…" : "Quit and Reopen Seen") {
@@ -372,17 +369,18 @@ private struct PermissionsPane: View {
                                             relaunchFailed = true
                                         }
                                     }
-                                    .buttonStyle(PaperPrimaryButtonStyle())
+                                    .buttonStyle(TerminalPrimaryButtonStyle(fillWidth: false))
                                     .disabled(didTapRestart)
                                 } else {
                                     Button("Grant…") {
                                         _ = CGRequestScreenCaptureAccess()
                                         composition.appState.markPermissionRequested()
                                     }
-                                    .buttonStyle(PaperSecondaryButtonStyle())
+                                    .buttonStyle(TerminalSecondaryButtonStyle())
                                 }
                             }
                         }
+                        .fixedSize(horizontal: true, vertical: false)
                     }
                 }
             }
@@ -394,19 +392,21 @@ private struct PermissionsPane: View {
                         NSWorkspace.shared.open(url)
                     }
                 }
-                .buttonStyle(PaperSecondaryButtonStyle())
+                .buttonStyle(TerminalSecondaryButtonStyle())
                 .fixedSize()
-                
+
                 if phase == .requestedPendingRestart {
-                    Text("If you've already allowed Seen in System Settings, it needs to restart before it can see your screen.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(SeenTheme.Paper.mute)
+                    InfoNote(text: "If you've already allowed Seen in System Settings, it needs to restart before it can see your screen.")
                 }
 
                 if relaunchFailed {
-                    Text("Couldn't restart automatically — please quit Seen and open it again.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(SeenTheme.Paper.bad)
+                    HStack(alignment: .top, spacing: SeenTheme.Spacing.sm) {
+                        Marker(glyph: "!", color: SeenTheme.Term.bad)
+                        Text("Couldn't restart automatically — please quit Seen and open it again.")
+                            .seenType(SeenType.caption)
+                            .foregroundStyle(SeenTheme.Term.bad)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }

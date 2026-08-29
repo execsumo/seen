@@ -18,7 +18,14 @@ let package = Package(
         .target(name: "SeenKit"),
 
         // Menu bar app shell: UI, settings, hotkey, composition root.
-        .executableTarget(name: "SeenApp", dependencies: ["SeenKit"]),
+        // The JetBrains Mono faces ship with the app: DESIGN.md's typography is
+        // that family exclusively, and a Mac that has never installed it would
+        // otherwise fall back to the system face.
+        .executableTarget(
+            name: "SeenApp",
+            dependencies: ["SeenKit"],
+            resources: [.copy("Resources/Fonts")]
+        ),
 
         // `seen` CLI + `seen mcp` stdio shim, thin clients of the socket API.
         .executableTarget(
