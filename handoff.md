@@ -6,8 +6,8 @@
 feature work remaining.
 
 **In flight:** branch `design/terminal-brutalism` restyles the whole UI to the
-"High-Performance Terminal" system in `DESIGN.md`. It is written but **not yet
-compiled** — see "Resume here" below.
+"High-Performance Terminal" system in `DESIGN.md`. It builds clean and the
+tests pass — see "Resume here" below for what is and isn't confirmed.
 
 The project is a macOS 15+ menu-bar app that captures screenshots and OCR, and
 exposes them to AI tools through MCP, a CLI, or raw HTTP over a per-user Unix
@@ -53,33 +53,23 @@ does not exist, so it has never been type-checked, linked, or rendered.
   registers them with `CTFontManagerRegisterFontsForURL` at first font
   resolution and falls back to the system monospace face if they are missing.
 
-**Verified on Linux**
+**Verified**
 
-- `swiftc -parse -swift-version 6 Sources/SeenApp/*.swift` — clean, no
-  diagnostics. `Package.swift` parses; `bash -n scripts/bundle.sh` passes.
-  This is syntax only: no module was loaded and nothing was type-checked.
+- **On macOS (Darwin 25.5.0, arm64):** `swift build` completes clean — no
+  errors, no warnings — and `swift run SeenTests` is 67/67. The restyle
+  type-checks and links.
+- On Linux, where the branch was authored: `swiftc -parse -swift-version 6`
+  over `Sources/SeenApp` is clean, `Package.swift` parses, `bash -n
+  scripts/bundle.sh` passes.
 - A mechanical conformance check against `DESIGN.md` passes 29/29 — every
   colour in the token block traces to a value in `DESIGN.md`, every named type
   step matches the spec's frontmatter (size, weight, line height, letter
   spacing), spacing sits on the 4px baseline, and there is no `cornerRadius`,
   `RoundedRectangle`, `Capsule`, `.shadow`, or proportional font left in
   `Sources/SeenApp`.
-
-**Still to do on a Mac**
-
-1. `swift build` — the first real type-check. Watch for API drift in the new
-   code: `View.tracking(_:)`, `Rectangle().strokeBorder`, `TimelineView(.periodic)`,
-   `Font.custom(_:fixedSize:)`, and the synthesised memberwise initialisers of
-   `TerminalButtonSurface` / `MenuBarRowSurface` / `TerminalSegmented`.
-2. `swift run SeenTests` — should still be 67/67; nothing in `SeenKit` changed.
-3. `./scripts/bundle.sh --no-install` and confirm
-   `Seen.app/Contents/Resources/Fonts/` holds the four TTFs (the script now
-   `cmp`-guards this), then that the app signs with the added resources.
-4. Launch and look at all four surfaces — menu panel, and the General, Hotkey,
-   Destination, Permissions panes — plus the onboarding window. The layout
-   arithmetic for mono was done on paper; expect to nudge widths and paddings.
-   Confirm JetBrains Mono actually resolved (if it silently fell back you'll see
-   SF Mono, which is narrower and lacks the distinctive `l`/`i` shapes).
+- An intra-module check confirms all 45 `SeenTheme`/`SeenType`/`SeenFonts`
+  member references resolve and all 62 call sites of the 24 in-module
+  components match their synthesised memberwise initialisers.
 
 ## Non-blocking caveats
 

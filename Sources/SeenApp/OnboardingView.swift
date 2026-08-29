@@ -58,6 +58,7 @@ public struct OnboardingView: View {
                                 Text(granted ? "Granted — you're all set." : "Required to capture your screen.")
                                     .seenType(SeenType.caption)
                                     .foregroundStyle(SeenTheme.Term.mute)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: SeenTheme.Spacing.sm)
                             StatusTag(text: phase == .granted ? "Granted" : (phase == .requestedPendingRestart ? "Restart needed" : "Needed"),
@@ -119,7 +120,7 @@ public struct OnboardingView: View {
             }
             .padding(SeenTheme.Spacing.lg)
         }
-        .frame(width: 460, height: 440)
+        .frame(width: 480, height: 440)
         .background(SeenTheme.Term.base)
         .preferredColorScheme(.dark)
         .onReceive(Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()) { _ in
