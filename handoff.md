@@ -5,9 +5,10 @@
 **v0.1.3 is shipped and re-cut.** There is no known blocking work or required
 feature work remaining.
 
-**In flight:** branch `design/terminal-brutalism` restyles the whole UI to the
-"High-Performance Terminal" system in `DESIGN.md`. It builds clean and the
-tests pass — see "Resume here" below for what is and isn't confirmed.
+**Merged:** the `design/terminal-brutalism` restyle to the "High-Performance
+Terminal" system in `DESIGN.md` is complete. It builds clean, tests pass, and
+the composed screens (menu, Settings, onboarding) were walked by hand on a
+real macOS build and confirmed — see "Verified" below.
 
 The project is a macOS 15+ menu-bar app that captures screenshots and OCR, and
 exposes them to AI tools through MCP, a CLI, or raw HTTP over a per-user Unix
@@ -104,25 +105,22 @@ deliberately; if literal fidelity matters more than the IDE look for that one
 component, build its font from an `NSFontDescriptor` with common ligatures
 disabled rather than turning them off system-wide.
 
-**Not verified: the composed screens**
+**Verified: the composed screens**
 
-The proof sheet covers the design system, not how `MenuContent`, `SettingsView`,
-and `OnboardingView` arrange it. Walking those needs Accessibility access, which
-is the user's call and was deliberately not granted, so this stays a human
-click-through. Build it (`./scripts/bundle.sh --no-install`, then launch
-`build/Seen.app` — it shares a bundle ID with the installed copy, so quit
-`/Applications/Seen.app` first or you will have two identical menu-bar icons):
+A human click-through against a real `./scripts/bundle.sh --no-install` build
+confirmed `MenuContent`, `SettingsView`, and `OnboardingView` render correctly
+in the restyled system — no clipping in the tight spots (onboarding two-button
+row, Hotkey pane's key-chip row, Permissions row's trailing tag + button
+column), AppKit-drawn surfaces (folder picker, Capture App submenu) honour the
+pinned dark appearance, and motion (Hotkey pane's block cursor, menu-bar status
+square pulse) behaves as designed.
 
-1. **Clipping.** Every window was sized by arithmetic against a 0.6em advance,
-   never by looking. The tightest spots, in order: the onboarding two-button
-   row, the Hotkey pane's key-chip row beside the Record button, and the
-   Permissions row's trailing tag + button column.
-2. **AppKit-drawn surfaces.** The folder picker and the Capture App submenu are
-   drawn by AppKit, not by this design system, and are the likeliest to ignore
-   the pinned dark appearance.
-3. **Motion.** The Hotkey pane's block cursor should blink while recording, and
-   the menu-bar status square should pulse during an interval session — neither
-   animates in a still render.
+One follow-up landed from the click-through: the save-directory row in
+Settings → General used `CommandLineText` (a green `$` prompt and blue path in
+`SeenType.code` at 14px), which is styled for terminal/code output per
+`DESIGN.md`, not a plain path readout. Replaced with an unprefixed path in
+`SeenTheme.Term.dim` at 12px, same monospace/bordered/sunken-background
+treatment.
 
 ## Non-blocking caveats
 

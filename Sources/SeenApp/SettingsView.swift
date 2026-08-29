@@ -204,7 +204,19 @@ private struct GeneralPane: View {
                         .buttonStyle(TerminalSecondaryButtonStyle())
                 }
                 CardRow(isLast: true) {
-                    CommandLineText(text: settings.saveDirectoryPath)
+                    HStack {
+                        Text(settings.saveDirectoryPath)
+                            .seenType(SeenType.code.sized(12))
+                            .foregroundStyle(SeenTheme.Term.dim)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, SeenTheme.Spacing.md - 4)
+                    .padding(.vertical, SeenTheme.Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(SeenTheme.Term.sunken)
+                    .terminalBorder()
                 }
             }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.folder]) { result in
