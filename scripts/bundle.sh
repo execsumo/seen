@@ -83,6 +83,23 @@ if ! cmp -s "$CLI_BINARY" "$APP_BUNDLE/Contents/Resources/bin/seen"; then
     exit 1
 fi
 
+# JetBrains Mono ships inside the bundle: DESIGN.md's typography is that family
+# exclusively, and the app registers these faces at launch from
+# Contents/Resources/Fonts. Without them a Mac that has never installed the
+# family silently falls back to the system monospace face.
+FONT_SRC="$REPO_ROOT/Sources/SeenApp/Resources/Fonts"
+mkdir -p "$APP_BUNDLE/Contents/Resources/Fonts"
+cp "$FONT_SRC"/*.ttf "$APP_BUNDLE/Contents/Resources/Fonts/"
+cp "$FONT_SRC/OFL.txt" "$APP_BUNDLE/Contents/Resources/Fonts/OFL.txt"
+
+for face in Regular Medium SemiBold Bold; do
+    if ! cmp -s "$FONT_SRC/JetBrainsMono-$face.ttf" \
+                "$APP_BUNDLE/Contents/Resources/Fonts/JetBrainsMono-$face.ttf"; then
+        echo "ERROR: JetBrainsMono-$face.ttf did not copy into the bundle."
+        exit 1
+    fi
+done
+
 mkdir -p "$APP_BUNDLE/Contents/Resources/seen-skill"
 cp "$REPO_ROOT/.claude/skills/seen/SKILL.md" "$APP_BUNDLE/Contents/Resources/seen-skill/SKILL.md"
 

@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import SeenKit
 
-/// The menu-bar dropdown, rendered as a Paper-styled panel
+/// The menu-bar dropdown, rendered as a terminal-styled panel
 /// (`.menuBarExtraStyle(.window)`). Built for the human at the keyboard —
 /// agents use the socket API, MCP, or CLI, never this surface.
 public struct MenuContent: View {
@@ -24,14 +24,12 @@ public struct MenuContent: View {
     public var body: some View {
         VStack(spacing: 0) {
             header
-                .padding(.horizontal, 10)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
+                .padding(SeenTheme.Spacing.md)
 
-            SeenTheme.Paper.borderSoft.frame(height: 0.5)
+            HRule()
 
             // Capture actions
-            VStack(spacing: 1) {
+            VStack(spacing: 0) {
                 MenuBarRow(title: "Capture Now",
                            icon: "camera.viewfinder",
                            hotkey: Hotkey.display(keyCode: composition.settings.hotkeyCode,
@@ -43,19 +41,17 @@ public struct MenuContent: View {
                     NSWorkspace.shared.open(URL(fileURLWithPath: composition.settings.saveDirectoryPath))
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .padding(.horizontal, SeenTheme.Spacing.sm)
+            .padding(.vertical, SeenTheme.Spacing.sm)
 
             // Active interval sessions
             if !composition.appState.sessionInfos.isEmpty {
-                SeenTheme.Paper.borderSoft.frame(height: 0.5)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Active Sessions")
-                        .font(.system(size: 10, weight: .bold))
-                        .kerning(0.5)
-                        .foregroundStyle(SeenTheme.Paper.mute)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 4)
+                HRule()
+                VStack(alignment: .leading, spacing: 0) {
+                    SectionLabel(text: "Active sessions")
+                        .padding(.horizontal, SeenTheme.Spacing.sm)
+                        .padding(.top, SeenTheme.Spacing.sm)
+                        .padding(.bottom, SeenTheme.Spacing.hair)
                     ForEach(composition.appState.sessionInfos) { info in
                         MenuBarRow(title: "Stop session \(info.id.uuidString.prefix(4))",
                                    icon: "stop.circle", accent: true) {
@@ -63,15 +59,15 @@ public struct MenuContent: View {
                         }
                     }
                 }
-                .padding(.horizontal, 6)
-                .padding(.bottom, 4)
+                .padding(.horizontal, SeenTheme.Spacing.sm)
+                .padding(.bottom, SeenTheme.Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            SeenTheme.Paper.borderSoft.frame(height: 0.5)
+            HRule()
 
             // Footer
-            VStack(spacing: 1) {
+            VStack(spacing: 0) {
                 MenuBarRow(title: "Settings…", icon: "gearshape") {
                     openWindow(id: "settings")
                     NSApp.activate(ignoringOtherApps: true)
@@ -81,11 +77,12 @@ public struct MenuContent: View {
                     NSApplication.shared.terminate(nil)
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .padding(.horizontal, SeenTheme.Spacing.sm)
+            .padding(.vertical, SeenTheme.Spacing.sm)
         }
-        .frame(width: 280)
-        .background(SeenTheme.Paper.bg)
+        .frame(width: 340)
+        .background(SeenTheme.Term.base)
+        .preferredColorScheme(.dark)
         .onReceive(ticker) { now = $0 }
         .onAppear(perform: loadApps)
     }
@@ -96,11 +93,11 @@ public struct MenuContent: View {
     private var header: some View {
         switch state {
         case .sessionActive:
-            StatusHeaderCard(dotColor: SeenTheme.Paper.bad, pulsing: true,
+            StatusHeaderCard(dotColor: SeenTheme.Term.bad, pulsing: true,
                              title: "Capturing on a schedule",
                              subtitle: "\(composition.appState.activeSessions) active session\(composition.appState.activeSessions == 1 ? "" : "s")")
         case .recentCapture:
-            StatusHeaderCard(dotColor: SeenTheme.Paper.accent, pulsing: false,
+            StatusHeaderCard(dotColor: SeenTheme.Term.amber, pulsing: false,
                              title: "Screenshot captured",
                              subtitle: "Saved to your screenshots folder")
         case .idle:
@@ -125,11 +122,11 @@ public struct MenuContent: View {
     private var idleDotColor: Color {
         // No Screen Recording → nothing captures at all: red, not amber. Amber is
         // reserved for states where capture still works (bridge starting/offline).
-        guard composition.appState.hasPermission else { return SeenTheme.Paper.bad }
+        guard composition.appState.hasPermission else { return SeenTheme.Term.bad }
         switch composition.appState.serverStatus {
-        case .running:  return SeenTheme.Paper.good
-        case .starting: return SeenTheme.Paper.warn
-        case .failed:   return SeenTheme.Paper.warn // capture still works, but the bridge is down — amber, not green
+        case .running:  return SeenTheme.Term.good
+        case .starting: return SeenTheme.Term.warn
+        case .failed:   return SeenTheme.Term.warn // capture still works, but the bridge is down — amber, not green
         }
     }
 
@@ -154,19 +151,7 @@ public struct MenuContent: View {
                 }
             }
         } label: {
-            HStack(spacing: 9) {
-                Image(systemName: "square.on.square")
-                    .font(.system(size: 12))
-                    .foregroundStyle(SeenTheme.Paper.ink2)
-                    .frame(width: 18, alignment: .center)
-                Text("Capture App")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(SeenTheme.Paper.ink)
-                Spacer()
-            }
-            .contentShape(Rectangle())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            MenuBarRowLabel(title: "Capture App", icon: "square.on.square")
         }
         .menuStyle(.button)
         .buttonStyle(MenuBarRowStyle())

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Carbon
+import CoreText
 
 // MARK: - Color helpers
 
@@ -15,65 +16,220 @@ extension Color {
             blue:  Double( n        & 0xFF) / 255
         )
     }
-
-    /// A color that resolves differently in light vs dark appearance.
-    init(light: String, dark: String) {
-        self.init(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
-            if appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
-                return NSColor(Color(hex: dark))
-            } else {
-                return NSColor(Color(hex: light))
-            }
-        }))
-    }
 }
 
-// MARK: - Theme ("Paper" palette, shared with Heard)
+// MARK: - Theme (DESIGN.md — "High-Performance Terminal")
 
+/// The design system is dark-only by construction: DESIGN.md ships a single
+/// palette anchored on a near-black ground, so the app pins itself to the dark
+/// appearance rather than resolving two sets of tokens.
 enum SeenTheme {
-    enum Paper {
-        static let bg           = Color(light: "F5EFE4", dark: "1C2024")
-        static let surface      = Color(light: "FBF7EF", dark: "252A30")
-        static let surfaceAlt   = Color(light: "EFE7D7", dark: "2E3338")
-        static let sidebar      = Color(light: "EBE2CE", dark: "22272D")
-        static let border       = Color(light: "D9CFB9", dark: "4A515A")
-        static let borderSoft   = Color(light: "E5DCC8", dark: "3A3F47")
-        static let ink          = Color(light: "1C2024", dark: "F5EFE4")
-        static let ink2         = Color(light: "3A3F47", dark: "D9CFB9")
-        static let mute         = Color(light: "7B7264", dark: "9A9184")
-        static let muteSoft     = Color(light: "C9BBA5", dark: "4A515A")
-        static let accent       = Color(light: "3F5C8C", dark: "658BC9")
-        static let accentInk    = Color(light: "2F4570", dark: "8BB2F2")
-        static let accentSoft   = Color(light: "E5EAF3", dark: "26334A")
-        static let good         = Color(light: "3D7A4F", dark: "53A66B")
-        static let goodSoft     = Color(light: "E1EEDF", dark: "243D2D")
-        static let warn         = Color(light: "A66A1F", dark: "D98A29")
-        static let warnSoft     = Color(light: "F4E6CE", dark: "4D351A")
-        static let bad          = Color(light: "A6452B", dark: "D65738")
-        static let badSoft      = Color(light: "F2DCD2", dark: "4A251C")
-        static let heroBg       = Color(light: "2E3338", dark: "12161A")
-        static let heroInk      = Color(light: "F5EFE4", dark: "F5EFE4")
+    /// Tokens from DESIGN.md. Where the token block and the prose disagree on
+    /// the ground colour, the prose wins: it anchors the palette at `#08080B`
+    /// and puts containers at `#121217`, which is the relationship the whole
+    /// elevation model depends on (containers must read *above* the ground).
+    enum Term {
+        // Ground and tonal layers — depth is tonal, never shadow.
+        static let base      = Color(hex: "08080B") // window ground
+        static let sunken    = Color(hex: "0E0E11") // surface-container-lowest: code blocks
+        static let elevated  = Color(hex: "121217") // surface-elevated: cards, panels
+        static let raised    = Color(hex: "1B1B1F") // surface-container-low: hover, sidebar
+        static let high      = Color(hex: "201F23") // surface-container: pressed, wells
+
+        // Structure — bold 1px borders carry the hierarchy.
+        static let border       = Color(hex: "1C1C22") // border-subtle
+        static let borderStrong = Color(hex: "524439") // outline-variant
+
+        // Text — the spec's own ramp, brightest to dimmest.
+        static let ink   = Color(hex: "E5E1E6") // on-surface: headings
+        static let body  = Color(hex: "D7C3B4") // on-surface-variant: parchment body
+        static let mute  = Color(hex: "C0B7A9") // on-secondary-container: secondary prose
+        static let dim   = Color(hex: "9F8D80") // outline: labels, metadata, hints
+
+        // Primary — warm, high-visibility amber.
+        static let amber       = Color(hex: "FFB46E") // primary-container
+        static let amberBright = Color(hex: "FFB876") // surface-tint
+        static let amberSoft   = Color(hex: "FFD9BA") // primary
+        static let onAmber     = Color(hex: "4B2800") // on-primary
+
+        // Terminal accents — syntax, output, status.
+        static let green = Color(hex: "A6E22E") // terminal-green
+        static let blue  = Color(hex: "66D9EF") // terminal-blue
+        static let cyan  = Color(hex: "AAEAFF") // tertiary
+        static let error = Color(hex: "FFB4AB") // error
+
+        // Semantic status.
+        static let good = green
+        static let warn = amber
+        static let bad  = error
+
+        /// Backdrop dim for overlays — 80% black, per the spec.
+        static let scrim = Color.black.opacity(0.8)
     }
 
+    /// 4px baseline. DESIGN.md calls for 8/16/24/32/48/64 increments; 4 is kept
+    /// only for hairline gaps between stacked rows.
     enum Spacing {
-        static let xs: CGFloat = 4
-        static let sm: CGFloat = 8
-        static let md: CGFloat = 12
-        static let lg: CGFloat = 20
-        static let xl: CGFloat = 28
+        static let hair: CGFloat = 4
+        static let sm:   CGFloat = 8
+        static let md:   CGFloat = 16
+        static let lg:   CGFloat = 24
+        static let xl:   CGFloat = 32
+        static let xxl:  CGFloat = 48
     }
 
-    enum Radius {
-        static let inline: CGFloat = 6
-        static let card: CGFloat = 10
-        static let hero: CGFloat = 14
-    }
+    /// The shape language is strictly sharp. Nothing in this app rounds.
+    static let radius: CGFloat = 0
 
-    /// Warm paper shadow used under cards.
-    static let cardShadow = Color(red: 60/255, green: 45/255, blue: 20/255).opacity(0.06)
+    /// Every container border in the system is 1px.
+    static let hairline: CGFloat = 1
 }
 
-// MARK: - SeenMark (app glyph — an eye, the "vision bridge")
+// MARK: - Typography (JetBrains Mono, exclusively)
+
+/// Loads the bundled JetBrains Mono faces into the process font registry.
+///
+/// The faces ship inside the app bundle so the terminal identity holds on a Mac
+/// that has never installed the family; if they're missing (a bare `swift run`
+/// against a tree without the resource copy), everything falls back to the
+/// system monospace face rather than to a proportional one.
+enum SeenFonts {
+    static let familyName = "JetBrains Mono"
+
+    /// `static let` runs exactly once, lazily, and thread-safely — so this both
+    /// performs the registration and records whether the family resolved.
+    static let isAvailable: Bool = registerBundledFaces()
+
+    static func font(_ size: CGFloat, _ weight: Font.Weight) -> Font {
+        isAvailable
+            ? .custom(familyName, fixedSize: size).weight(weight)
+            : .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    private static func registerBundledFaces() -> Bool {
+        for url in bundledFontURLs() {
+            var error: Unmanaged<CFError>?
+            // A repeat registration returns false with an "already registered"
+            // error; there is nothing useful to do about either outcome, and
+            // the resolution check below is the real verdict.
+            _ = CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
+            error?.release()
+        }
+        // CTFontCreateWithName silently substitutes a fallback for an unknown
+        // name, so ask the created font what family it actually is.
+        let probe = CTFontCreateWithName(familyName as CFString, 12, nil)
+        return (CTFontCopyFamilyName(probe) as String) == familyName
+    }
+
+    private static func bundledFontURLs() -> [URL] {
+        var roots: [URL] = []
+        if let resources = Bundle.main.resourceURL { roots.append(resources) }
+        roots.append(Bundle.main.bundleURL)
+        if let exe = Bundle.main.executableURL { roots.append(exe.deletingLastPathComponent()) }
+
+        // `Fonts/` is where scripts/bundle.sh puts them inside the .app;
+        // the SwiftPM resource bundle is where `swift run SeenApp` finds them.
+        let relativePaths = [
+            "Fonts",
+            "Seen_SeenApp.bundle/Contents/Resources/Fonts",
+            "Seen_SeenApp.bundle/Fonts",
+        ]
+
+        let fm = FileManager.default
+        var urls: [URL] = []
+        for root in roots {
+            for relative in relativePaths {
+                let dir = root.appendingPathComponent(relative)
+                guard let names = try? fm.contentsOfDirectory(atPath: dir.path) else { continue }
+                urls += names.filter { $0.hasSuffix(".ttf") }.sorted().map { dir.appendingPathComponent($0) }
+            }
+        }
+        return urls
+    }
+}
+
+/// The named type steps from DESIGN.md. Sizes, weights, tracking, and line
+/// height come straight from the spec's typography block.
+enum SeenType {
+    struct Style {
+        let size: CGFloat
+        let weight: Font.Weight
+        /// Absolute tracking in points (the spec's em values × size).
+        let tracking: CGFloat
+        /// Unitless line height from the spec.
+        let lineHeight: CGFloat
+
+        /// Extra leading SwiftUI needs to approximate the spec's line height.
+        var lineSpacing: CGFloat { max(0, size * (lineHeight - 1)) }
+
+        func weighted(_ w: Font.Weight) -> Style {
+            Style(size: size, weight: w, tracking: tracking, lineHeight: lineHeight)
+        }
+
+        func sized(_ s: CGFloat) -> Style {
+            Style(size: s, weight: weight, tracking: tracking, lineHeight: lineHeight)
+        }
+    }
+
+    static let headlineXL = Style(size: 48, weight: .bold,     tracking: -0.96, lineHeight: 1.1)
+    static let headlineLG = Style(size: 32, weight: .semibold, tracking: -0.32, lineHeight: 1.2)
+    /// `headline-lg-mobile` — the right structural step for a 720pt settings
+    /// window, where the 32px headline would swamp the pane.
+    static let headlineMD = Style(size: 24, weight: .semibold, tracking: 0,     lineHeight: 1.2)
+    static let bodyMD     = Style(size: 16, weight: .regular,  tracking: 0,     lineHeight: 1.6)
+    static let bodySM     = Style(size: 14, weight: .regular,  tracking: 0,     lineHeight: 1.5)
+    static let label      = Style(size: 12, weight: .medium,   tracking: 0.6,   lineHeight: 1.0)
+    static let code       = Style(size: 14, weight: .regular,  tracking: 0,     lineHeight: 1.7)
+    /// Sentence-case metadata at label size — the spec reserves all-caps + the
+    /// 0.05em tracking for labels proper, so prose at 12px drops the tracking.
+    static let caption    = Style(size: 12, weight: .regular,  tracking: 0,     lineHeight: 1.5)
+}
+
+struct SeenTypeModifier: ViewModifier {
+    let style: SeenType.Style
+    func body(content: Content) -> some View {
+        content
+            .font(SeenFonts.font(style.size, style.weight))
+            .tracking(style.tracking)
+            .lineSpacing(style.lineSpacing)
+    }
+}
+
+extension View {
+    /// Applies one of the DESIGN.md type steps: face, size, weight, tracking,
+    /// and line height together.
+    func seenType(_ style: SeenType.Style) -> some View {
+        modifier(SeenTypeModifier(style: style))
+    }
+}
+
+// MARK: - Structural primitives
+
+/// A 1px horizontal rule — the system's unit of structure.
+struct HRule: View {
+    var color: Color = SeenTheme.Term.border
+    var body: some View {
+        color.frame(height: SeenTheme.hairline)
+    }
+}
+
+/// A sharp 1px border drawn inside the view's own bounds.
+struct BorderOverlay: ViewModifier {
+    let color: Color
+    let width: CGFloat
+    func body(content: Content) -> some View {
+        content.overlay { Rectangle().strokeBorder(color, lineWidth: width) }
+    }
+}
+
+extension View {
+    func terminalBorder(_ color: Color = SeenTheme.Term.border,
+                        width: CGFloat = SeenTheme.hairline) -> some View {
+        modifier(BorderOverlay(color: color, width: width))
+    }
+}
+
+// MARK: - SeenMark (app glyph — a sharp terminal enclosure around an eye)
 
 struct SeenMark: View {
     var size: CGFloat = 26
@@ -81,35 +237,28 @@ struct SeenMark: View {
     var body: some View {
         Canvas { ctx, sz in
             let s = sz.width / 64
-            // Squircle background gradient
-            let bgPath = RoundedRectangle(cornerRadius: 14 * s)
-                .path(in: CGRect(origin: .zero, size: sz))
-            ctx.fill(bgPath, with: .linearGradient(
-                Gradient(colors: [Color(hex: "E8DFD2"), Color(hex: "C9BBA5")]),
-                startPoint: CGPoint(x: sz.width / 2, y: 0),
-                endPoint: CGPoint(x: sz.width / 2, y: sz.height)
-            ))
-            // Eye almond
+            let rect = CGRect(origin: .zero, size: sz)
+            let stroke = max(1, 2 * s)
+
+            // Sharp enclosure: sunken ground, amber rule. No radius, no shadow.
+            ctx.fill(Path(rect), with: .color(SeenTheme.Term.sunken))
+            ctx.stroke(Path(rect.insetBy(dx: stroke / 2, dy: stroke / 2)),
+                       with: .color(SeenTheme.Term.amber), lineWidth: stroke)
+
+            // Eye almond, drawn as an outline the way a terminal glyph would be.
             var eye = Path()
-            eye.move(to: CGPoint(x: 12 * s, y: 32 * s))
-            eye.addQuadCurve(to: CGPoint(x: 52 * s, y: 32 * s),
-                             control: CGPoint(x: 32 * s, y: 15 * s))
-            eye.addQuadCurve(to: CGPoint(x: 12 * s, y: 32 * s),
-                             control: CGPoint(x: 32 * s, y: 49 * s))
+            eye.move(to: CGPoint(x: 14 * s, y: 32 * s))
+            eye.addQuadCurve(to: CGPoint(x: 50 * s, y: 32 * s),
+                             control: CGPoint(x: 32 * s, y: 16 * s))
+            eye.addQuadCurve(to: CGPoint(x: 14 * s, y: 32 * s),
+                             control: CGPoint(x: 32 * s, y: 48 * s))
             eye.closeSubpath()
-            ctx.fill(eye, with: .linearGradient(
-                Gradient(colors: [Color(hex: "2E3338"), Color(hex: "1C2024")]),
-                startPoint: CGPoint(x: sz.width / 2, y: 0),
-                endPoint: CGPoint(x: sz.width / 2, y: sz.height)
-            ))
-            // Iris + pupil
+            ctx.stroke(eye, with: .color(SeenTheme.Term.amberSoft), lineWidth: max(1, 2.5 * s))
+
+            // Square pupil — the brutalist tell.
             ctx.fill(
-                Path(ellipseIn: CGRect(x: (32 - 9) * s, y: (32 - 9) * s, width: 18 * s, height: 18 * s)),
-                with: .color(Color(hex: "E8DFD2"))
-            )
-            ctx.fill(
-                Path(ellipseIn: CGRect(x: (32 - 4.5) * s, y: (32 - 4.5) * s, width: 9 * s, height: 9 * s)),
-                with: .color(Color(hex: "1C2024"))
+                Path(CGRect(x: 26 * s, y: 26 * s, width: 12 * s, height: 12 * s)),
+                with: .color(SeenTheme.Term.amber)
             )
         }
         .frame(width: size, height: size)
@@ -118,30 +267,36 @@ struct SeenMark: View {
 
 // MARK: - Shared components
 
+/// All-caps metadata label, per the spec's label treatment.
 struct SectionLabel: View {
     let text: String
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 10.5, weight: .bold))
-            .kerning(0.7)
-            .foregroundStyle(SeenTheme.Paper.mute)
+            .seenType(SeenType.label.weighted(.semibold))
+            .foregroundStyle(SeenTheme.Term.mute)
     }
 }
 
+/// A minimalist container: 1px border, tonal lift, square corners. An optional
+/// title is separated from the content by a 1px rule, per the spec.
 struct SettingsCard<Content: View>: View {
+    var title: String? = nil
     @ViewBuilder let content: Content
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let title {
+                SectionLabel(text: title)
+                    .padding(.horizontal, SeenTheme.Spacing.md)
+                    .padding(.vertical, SeenTheme.Spacing.sm + 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                HRule()
+            }
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SeenTheme.Paper.surface)
-        .clipShape(RoundedRectangle(cornerRadius: SeenTheme.Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: SeenTheme.Radius.card)
-                .stroke(SeenTheme.Paper.border, lineWidth: 0.5)
-        )
-        .shadow(color: SeenTheme.cardShadow, radius: 1, x: 0, y: 1)
+        .background(SeenTheme.Term.elevated)
+        .terminalBorder()
     }
 }
 
@@ -152,32 +307,33 @@ struct CardRow<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             content
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
+                .padding(.horizontal, SeenTheme.Spacing.md)
+                .padding(.vertical, SeenTheme.Spacing.md - 4)
             if !isLast {
-                SeenTheme.Paper.borderSoft
-                    .frame(height: 0.5)
-                    .padding(.leading, 12)
+                // Full-bleed: structure is defined by borders, not by insets.
+                HRule()
             }
         }
     }
 }
 
-struct StatusPill: View {
+/// A sharp-edged tag — the spec's chip, with a monochromatic tint and a border.
+struct StatusTag: View {
     let text: String
-    let fg: Color
-    let bg: Color
+    let color: Color
 
     var body: some View {
-        Text(text)
-            .font(.system(size: 10.5, weight: .semibold))
-            .foregroundStyle(fg)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(bg, in: Capsule())
+        Text(text.uppercased())
+            .seenType(SeenType.label.weighted(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, SeenTheme.Spacing.sm)
+            .padding(.vertical, SeenTheme.Spacing.hair)
+            .background(color.opacity(0.12))
+            .terminalBorder(color.opacity(0.45))
     }
 }
 
+/// A square status indicator. Circles are off-language here.
 struct StatusDot: View {
     let color: Color
     let pulsing: Bool
@@ -186,17 +342,80 @@ struct StatusDot: View {
     var body: some View {
         ZStack {
             if pulsing {
-                Circle()
-                    .fill(color.opacity(pulse ? 0.22 : 0))
-                    .frame(width: 14, height: 14)
+                Rectangle()
+                    .fill(color.opacity(pulse ? 0.28 : 0))
+                    .frame(width: 16, height: 16)
                     .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
             }
-            Circle()
+            Rectangle()
                 .fill(color)
-                .frame(width: 7, height: 7)
+                .frame(width: 8, height: 8)
         }
-        .frame(width: 14, height: 14)
+        .frame(width: 16, height: 16)
         .onAppear { if pulsing { pulse = true } }
+    }
+}
+
+/// The command-line focus metaphor: a hard-blinking block cursor.
+struct BlockCursor: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+            let lit = Int(ctx.date.timeIntervalSinceReferenceDate / 0.5) % 2 == 0
+            Rectangle()
+                .fill(SeenTheme.Term.amber)
+                .opacity(lit ? 1 : 0)
+        }
+        .frame(width: 8, height: 16)
+    }
+}
+
+/// A monospaced list marker, standing in for a bullet.
+struct Marker: View {
+    var glyph: String = ">"
+    var color: Color = SeenTheme.Term.amber
+    var body: some View {
+        Text(glyph)
+            .seenType(SeenType.caption.weighted(.bold))
+            .foregroundStyle(color)
+    }
+}
+
+/// Secondary prose, introduced by a `> ` marker instead of an icon bullet.
+struct InfoNote: View {
+    let text: String
+    var body: some View {
+        HStack(alignment: .top, spacing: SeenTheme.Spacing.sm) {
+            Marker(color: SeenTheme.Term.dim)
+            Text(text)
+                .seenType(SeenType.caption)
+                .foregroundStyle(SeenTheme.Term.mute)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// A code block: sunken ground, 1px border, terminal syntax colours.
+struct CommandLineText: View {
+    let text: String
+    var prompt: String = "$"
+
+    var body: some View {
+        HStack(spacing: SeenTheme.Spacing.sm) {
+            Text(prompt)
+                .seenType(SeenType.code.weighted(.bold))
+                .foregroundStyle(SeenTheme.Term.green)
+            Text(text)
+                .seenType(SeenType.code)
+                .foregroundStyle(SeenTheme.Term.blue)
+                .lineLimit(1)
+                .truncationMode(.head)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, SeenTheme.Spacing.md - 4)
+        .padding(.vertical, SeenTheme.Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SeenTheme.Term.sunken)
+        .terminalBorder()
     }
 }
 
@@ -206,16 +425,12 @@ struct KeyChip: View {
     let symbol: String
     var body: some View {
         Text(symbol)
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
-            .foregroundStyle(SeenTheme.Paper.ink)
-            .frame(minWidth: 24, minHeight: 26)
-            .padding(.horizontal, 6)
-            .background(SeenTheme.Paper.surface, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(SeenTheme.Paper.border, lineWidth: 0.5)
-            )
-            .shadow(color: SeenTheme.cardShadow, radius: 0.5, x: 0, y: 1)
+            .seenType(SeenType.label.weighted(.semibold).sized(13))
+            .foregroundStyle(SeenTheme.Term.amberSoft)
+            .frame(minWidth: 18, minHeight: 24)
+            .padding(.horizontal, SeenTheme.Spacing.sm)
+            .background(SeenTheme.Term.high)
+            .terminalBorder(SeenTheme.Term.borderStrong)
     }
 }
 
@@ -225,7 +440,7 @@ struct KeyChipRow: View {
     let carbonModifiers: Int
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: SeenTheme.Spacing.hair) {
             ForEach(Hotkey.symbols(keyCode: keyCode, carbonModifiers: carbonModifiers), id: \.self) { sym in
                 KeyChip(symbol: sym)
             }
@@ -243,28 +458,31 @@ struct StatusHeaderCard: View {
     var trailing: AnyView? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: SeenTheme.Spacing.sm) {
             StatusDot(color: dotColor, pulsing: pulsing)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(SeenTheme.Paper.ink)
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(SeenTheme.Paper.mute)
+                    .seenType(SeenType.bodySM.weighted(.semibold))
+                    .foregroundStyle(SeenTheme.Term.ink)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                Text(subtitle)
+                    .seenType(SeenType.caption)
+                    .foregroundStyle(SeenTheme.Term.mute)
+                    // Mono is wider than the proportional face this replaced, so
+                    // the longer status lines wrap rather than truncate.
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Spacer(minLength: 4)
+            Spacer(minLength: SeenTheme.Spacing.hair)
             if let trailing { trailing }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, SeenTheme.Spacing.md - 4)
+        .padding(.vertical, SeenTheme.Spacing.sm + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: SeenTheme.Radius.card)
-                .fill(SeenTheme.Paper.surfaceAlt)
-        )
+        .background(SeenTheme.Term.elevated)
+        .terminalBorder()
     }
 }
 
@@ -277,69 +495,185 @@ struct MenuBarRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(accent ? SeenTheme.Paper.accent : SeenTheme.Paper.ink2)
-                    .frame(width: 18, alignment: .center)
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(accent ? SeenTheme.Paper.accent : SeenTheme.Paper.ink)
-                Spacer()
-                if let hotkey {
-                    Text(hotkey)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(SeenTheme.Paper.mute)
-                }
-            }
-            .contentShape(Rectangle())
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            MenuBarRowLabel(title: title, icon: icon, accent: accent, hotkey: hotkey)
         }
         .buttonStyle(MenuBarRowStyle())
     }
 }
 
+/// Shared label so the `Capture App` submenu reads identically to a plain row.
+struct MenuBarRowLabel: View {
+    let title: String
+    let icon: String
+    var accent: Bool = false
+    var hotkey: String? = nil
+
+    var body: some View {
+        HStack(spacing: SeenTheme.Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundStyle(accent ? SeenTheme.Term.amber : SeenTheme.Term.mute)
+                .frame(width: 16, alignment: .center)
+            Text(title)
+                .seenType(SeenType.bodySM)
+                .foregroundStyle(accent ? SeenTheme.Term.amber : SeenTheme.Term.body)
+                .lineLimit(1)
+            Spacer(minLength: SeenTheme.Spacing.sm)
+            if let hotkey {
+                Text(hotkey)
+                    .seenType(SeenType.caption)
+                    .foregroundStyle(SeenTheme.Term.dim)
+            }
+        }
+        .contentShape(Rectangle())
+        .padding(.horizontal, SeenTheme.Spacing.sm)
+        .padding(.vertical, SeenTheme.Spacing.sm - 1)
+    }
+}
+
+/// Hover lifts the row onto a tonal layer and marks it with an amber rule on
+/// the leading edge; pressing inverts it, per the spec's hover guidance.
 struct MenuBarRowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .background(
-                configuration.isPressed ? SeenTheme.Paper.surfaceAlt : Color.clear,
-                in: RoundedRectangle(cornerRadius: 5)
-            )
+        MenuBarRowSurface(isPressed: configuration.isPressed) { configuration.label }
     }
 }
 
-// MARK: - Paper button styles
+struct MenuBarRowSurface<Label: View>: View {
+    let isPressed: Bool
+    @ViewBuilder let label: Label
+    @State private var hovering = false
 
-/// Filled accent button (primary action).
-struct PaperPrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.vertical, 6)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
-            .background(SeenTheme.Paper.accent, in: RoundedRectangle(cornerRadius: SeenTheme.Radius.inline))
-            .opacity(configuration.isPressed ? 0.8 : 1)
+    var body: some View {
+        label
+            .background(isPressed ? SeenTheme.Term.high : (hovering ? SeenTheme.Term.raised : Color.clear))
+            .overlay(alignment: .leading) {
+                SeenTheme.Term.amber
+                    .frame(width: 2)
+                    .opacity(hovering || isPressed ? 1 : 0)
+            }
+            .onHover { hovering = $0 }
     }
 }
 
-/// Bordered surface button (secondary action).
-struct PaperSecondaryButtonStyle: ButtonStyle {
+// MARK: - Button styles
+
+/// Primary action: a solid amber rectangle with near-black text. Hover inverts
+/// it to an amber-on-ground outline.
+struct TerminalPrimaryButtonStyle: ButtonStyle {
+    /// Primary buttons stretch by default; standalone actions opt out.
+    var fillWidth: Bool = true
+
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(SeenTheme.Paper.ink)
-            .padding(.vertical, 5)
-            .padding(.horizontal, 10)
-            .background(SeenTheme.Paper.surface, in: RoundedRectangle(cornerRadius: SeenTheme.Radius.inline))
-            .overlay(
-                RoundedRectangle(cornerRadius: SeenTheme.Radius.inline)
-                    .stroke(SeenTheme.Paper.border, lineWidth: 0.5)
-            )
-            .opacity(configuration.isPressed ? 0.7 : 1)
+        TerminalButtonSurface(
+            label: configuration.label,
+            isPressed: configuration.isPressed,
+            fillWidth: fillWidth,
+            restFill: SeenTheme.Term.amber,
+            restText: SeenTheme.Term.onAmber,
+            restBorder: SeenTheme.Term.amber,
+            hoverFill: .clear,
+            hoverText: SeenTheme.Term.amber,
+            hoverBorder: SeenTheme.Term.amber,
+            pressedFill: SeenTheme.Term.amberBright,
+            pressedText: SeenTheme.Term.onAmber,
+            weight: .bold
+        )
+    }
+}
+
+/// Secondary action: 1px parchment border, no fill. Hover switches the border
+/// and the text to amber and doubles the border weight.
+struct TerminalSecondaryButtonStyle: ButtonStyle {
+    var fillWidth: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        TerminalButtonSurface(
+            label: configuration.label,
+            isPressed: configuration.isPressed,
+            fillWidth: fillWidth,
+            restFill: .clear,
+            restText: SeenTheme.Term.body,
+            restBorder: SeenTheme.Term.borderStrong,
+            hoverFill: .clear,
+            hoverText: SeenTheme.Term.amber,
+            hoverBorder: SeenTheme.Term.amber,
+            pressedFill: SeenTheme.Term.high,
+            pressedText: SeenTheme.Term.amber,
+            weight: .medium,
+            hoverBorderWidth: 2
+        )
+    }
+}
+
+struct TerminalButtonSurface<Label: View>: View {
+    let label: Label
+    let isPressed: Bool
+    let fillWidth: Bool
+    let restFill: Color
+    let restText: Color
+    let restBorder: Color
+    let hoverFill: Color
+    let hoverText: Color
+    let hoverBorder: Color
+    let pressedFill: Color
+    let pressedText: Color
+    let weight: Font.Weight
+    var hoverBorderWidth: CGFloat = SeenTheme.hairline
+
+    @State private var hovering = false
+
+    private var fill: Color { isPressed ? pressedFill : (hovering ? hoverFill : restFill) }
+    private var text: Color { isPressed ? pressedText : (hovering ? hoverText : restText) }
+    private var border: Color { hovering || isPressed ? hoverBorder : restBorder }
+    private var borderWidth: CGFloat { hovering || isPressed ? hoverBorderWidth : SeenTheme.hairline }
+
+    var body: some View {
+        label
+            .seenType(SeenType.label.weighted(weight).sized(13))
+            .foregroundStyle(text)
+            .padding(.vertical, SeenTheme.Spacing.sm)
+            .padding(.horizontal, SeenTheme.Spacing.md - 4)
+            .frame(maxWidth: fillWidth ? .infinity : nil)
+            .background(fill)
+            .terminalBorder(border, width: borderWidth)
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+    }
+}
+
+// MARK: - Segmented selector
+
+/// A sharp-edged replacement for `Picker(.segmented)`: adjacent 1px cells with
+/// a solid amber fill on the selected one.
+struct TerminalSegmented<Value: Hashable>: View {
+    let options: [(label: String, value: Value)]
+    @Binding var selection: Value
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                let selected = option.value == selection
+                Button {
+                    selection = option.value
+                } label: {
+                    Text(option.label)
+                        .seenType(SeenType.label.weighted(selected ? .bold : .medium).sized(13))
+                        .foregroundStyle(selected ? SeenTheme.Term.onAmber : SeenTheme.Term.body)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, SeenTheme.Spacing.sm)
+                        .background(selected ? SeenTheme.Term.amber : Color.clear)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if index < options.count - 1 {
+                    SeenTheme.Term.border.frame(width: SeenTheme.hairline)
+                }
+            }
+        }
+        .background(SeenTheme.Term.sunken)
+        .terminalBorder(SeenTheme.Term.borderStrong)
     }
 }
 
