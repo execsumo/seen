@@ -101,9 +101,17 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update Homebrew cask
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
           SHA256="${{ steps.meta.outputs.sha256 }}"
+          # checkout runs against the tag's commit, which can already be behind
+          # main (e.g. a retry after this job failed past this point last time).
+          # Rebuild the cask edit on top of current main so the commit below is
+          # always a fast-forward, instead of replaying a stale diff.
+          git fetch origin main
+          git checkout -B main origin/main
           sed -i '' \
             -e "s/version \"[^\"]*\"/version \"${VERSION}\"/" \
             -e "s/sha256 \"[^\"]*\"/sha256 \"${SHA256}\"/" \
@@ -116,6 +124,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/seen.rb
+          if git diff --cached --quiet; then
+            echo "Cask already up to date on main; nothing to commit."
+            exit 0
+          fi
           # No [skip ci]: ci.yml's paths-ignore already excludes Casks/**, so this
           # sha-only commit costs no run. Dropping the blunt override means a bot
           # commit that ever touched code would still be gated.
@@ -135,5 +147,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Casks/seen.rb
+          if git diff --cached --quiet; then
+            echo "Tap cask already up to date; nothing to commit."
+            exit 0
+          fi
           git commit -m "Update seen to v${VERSION}"
           git push origin HEAD:refs/heads/main
