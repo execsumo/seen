@@ -15,6 +15,8 @@ replaced the release asset, and then died before updating either cask. Both
 were left pointing at a sha256 the published asset no longer had. v0.1.5
 supersedes it; v0.1.4 was left as-is rather than re-cut.
 
+That failure mode is now designed out — see "Release workflow" below.
+
 **Merged:** the `design/terminal-brutalism` restyle to the "High-Performance
 Terminal" system in `DESIGN.md` is complete. It builds clean, tests pass, and
 the composed screens (menu, Settings, onboarding) were walked by hand on a
@@ -163,6 +165,35 @@ These are deliberately not required for the current release:
 - `ARCHITECTURE.md` is the design reference.
 - No Xcode project is used; Swift Package Manager and Command Line Tools are
   sufficient.
+
+### Release workflow
+
+Two invariants hold the Homebrew casks and the published DMG together. Both
+exist because a notarized, stapled DMG is **not byte-reproducible**: rebuilding
+the same version yields a different sha256 every time.
+
+1. **A published asset is never replaced.** The upload step passes
+   `overwrite_files: false`, so `action-gh-release` skips an asset that already
+   exists rather than deleting and re-uploading it. Whatever was published first
+   for a given version stands permanently. Without this, any run that replaced
+   an asset and then failed before the casks were updated left both casks
+   describing a file that no longer existed — how v0.1.4 broke `brew install`.
+2. **The casks describe the published asset, not the local build.** The
+   `Resolve published asset checksum` step downloads the release asset back and
+   hashes *that*; the cask edit uses `steps.published.outputs.sha256`, never
+   `steps.meta.outputs.sha256` (this run's build). On a retry of an
+   already-published version the two differ, and the step logs both before
+   proceeding with the published one.
+
+Together these make a re-run idempotent: it converges on the asset that is
+actually downloadable instead of drifting away from it. If a version's asset is
+ever genuinely wrong, the fix is to cut a new version — not to re-run, which
+will now deliberately keep the existing asset.
+
+The cask commit is also retried against a freshly fetched `main` (see the loop
+in `Commit and push cask update`), because `actions/checkout` leaves the runner
+on the tag's commit, which is usually behind `main` by the time the job gets
+there.
 
 ### Release secrets
 

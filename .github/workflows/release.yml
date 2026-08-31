@@ -98,14 +98,59 @@ jobs:
           tag_name: v${{ steps.meta.outputs.version }}
           files: ${{ steps.meta.outputs.dmg }}
           generate_release_notes: true
+          # Never swap out an asset the casks may already describe. A notarized,
+          # stapled DMG is not byte-reproducible, so rebuilding an
+          # already-published version yields a different sha256; replacing the
+          # asset and then failing before the casks are updated leaves both of
+          # them pointing at a hash that no longer exists anywhere -- which is
+          # exactly how v0.1.4 broke `brew install`. With this false the action
+          # skips an existing asset instead of deleting it, so whatever was
+          # published first stays authoritative and a retry is idempotent.
+          overwrite_files: false
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve published asset checksum
+        id: published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          # Hash what is actually published rather than what this run built.
+          # With overwrite_files disabled the two differ whenever an earlier
+          # attempt already uploaded this version, and it is the published
+          # asset a `brew install` will fetch and verify.
+          for attempt in 1 2 3; do
+            rm -rf published && mkdir published
+            if gh release download "v${VERSION}" \
+                 --repo "$GITHUB_REPOSITORY" \
+                 --pattern "Seen-${VERSION}.dmg" \
+                 --dir published; then
+              break
+            fi
+            echo "Published asset not readable yet (attempt ${attempt}); retrying."
+            sleep $((attempt * 5))
+          done
+          PUBLISHED="published/Seen-${VERSION}.dmg"
+          if [[ ! -f "$PUBLISHED" ]]; then
+            echo "ERROR: could not download the published Seen-${VERSION}.dmg."
+            exit 1
+          fi
+          SHA256=$(shasum -a 256 "$PUBLISHED" | awk '{print $1}')
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          if [[ "$SHA256" != "${{ steps.meta.outputs.sha256 }}" ]]; then
+            echo "NOTE: the published asset is not the one this run built."
+            echo "  built:     ${{ steps.meta.outputs.sha256 }}"
+            echo "  published: ${SHA256}"
+            echo "v${VERSION} was already released by an earlier attempt; its"
+            echo "asset stands and the casks will describe it."
+          fi
 
       - name: Commit and push cask update
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
-          SHA256="${{ steps.meta.outputs.sha256 }}"
+          SHA256="${{ steps.published.outputs.sha256 }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://execsumo:${GH_PAT}@github.com/execsumo/seen.git"
