@@ -2,8 +2,18 @@
 
 ## Status
 
-**v0.1.3 is shipped and re-cut.** There is no known blocking work or required
-feature work remaining.
+**v0.1.5 is shipped.** Release, cask on `main`, and the `execsumo/tap` cask
+all carry the same sha256 as the published `Seen-0.1.5.dmg`, so
+`brew install --cask execsumo/tap/seen` resolves. There is no known blocking
+work or required feature work remaining.
+
+**v0.1.4 is a botched release; do not treat its tag as shipped.** Its workflow
+run failed at the cask push four times. One early attempt did complete, so the
+v0.1.4 cask reached both `main` and the tap — but a later retry rebuilt the
+DMG (a notarized, stapled DMG is not reproducible, so the hash changed),
+replaced the release asset, and then died before updating either cask. Both
+were left pointing at a sha256 the published asset no longer had. v0.1.5
+supersedes it; v0.1.4 was left as-is rather than re-cut.
 
 **Merged:** the `design/terminal-brutalism` restyle to the "High-Performance
 Terminal" system in `DESIGN.md` is complete. It builds clean, tests pass, and
@@ -153,3 +163,25 @@ These are deliberately not required for the current release:
 - `ARCHITECTURE.md` is the design reference.
 - No Xcode project is used; Swift Package Manager and Command Line Tools are
   sufficient.
+
+### Release secrets
+
+`.github/workflows/release.yml` uses five repo secrets: `APPLE_CERTIFICATE`
+and `APPLE_CERTIFICATE_PASSWORD` (Developer ID import), `APPLE_API_KEY`,
+`APPLE_API_KEY_ID` and `APPLE_API_ISSUER_ID` (notarization), plus `GH_PAT`.
+
+`GH_PAT` is **account-wide**: it carries write access to every `execsumo`
+repo, not just this one and the tap. The tap's `AGENTS.md` used to describe it
+as a fine-grained token scoped to `execsumo/homebrew-tap` alone; that was never
+true of the token actually in use. Treat it as a credential that grants write
+to the whole account when deciding where it may be referenced, and prefer
+narrowing it to a per-project fine-grained PAT.
+
+Note that the cask push to *this* repo's `main` does not actually depend on
+`GH_PAT`. `actions/checkout` leaves an `http.https://github.com/.extraheader`
+credential in the local git config that applies to every github.com URL, so
+the `git remote set-url origin https://execsumo:${GH_PAT}@...` line is
+decorative there — the push authenticates as `GITHUB_TOKEN`, which the job
+already grants `contents: write`. `GH_PAT` is load-bearing only for the tap
+step, which clones a *different* repo into a fresh directory the extraheader
+does not cover.
