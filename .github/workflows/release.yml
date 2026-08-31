@@ -100,40 +100,44 @@ jobs:
           generate_release_notes: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update Homebrew cask
+      - name: Commit and push cask update
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
           SHA256="${{ steps.meta.outputs.sha256 }}"
-          # checkout runs against the tag's commit, which can already be behind
-          # main (e.g. a retry after this job failed past this point last time).
-          # Rebuild the cask edit on top of current main so the commit below is
-          # always a fast-forward, instead of replaying a stale diff.
-          git fetch origin main
-          git checkout -B main origin/main
-          sed -i '' \
-            -e "s/version \"[^\"]*\"/version \"${VERSION}\"/" \
-            -e "s/sha256 \"[^\"]*\"/sha256 \"${SHA256}\"/" \
-            Casks/seen.rb
-
-      - name: Commit and push cask update
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Casks/seen.rb
-          if git diff --cached --quiet; then
-            echo "Cask already up to date on main; nothing to commit."
-            exit 0
-          fi
-          # No [skip ci]: ci.yml's paths-ignore already excludes Casks/**, so this
-          # sha-only commit costs no run. Dropping the blunt override means a bot
-          # commit that ever touched code would still be gated.
-          git commit -m "Update Homebrew cask to v${{ steps.meta.outputs.version }}"
           git remote set-url origin "https://execsumo:${GH_PAT}@github.com/execsumo/seen.git"
-          git push origin HEAD:refs/heads/main
+          # checkout runs against the tag's commit, which is usually behind main
+          # by the time we get here. Re-apply the edit onto whatever main is
+          # *now*, on every attempt, so the commit is always a fast-forward --
+          # a stale base is what produced the "fetch first" rejection. Retrying
+          # the whole fetch/edit/commit closes the race with anything else
+          # landing on main during the ~10 min build+notarize.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git checkout -B main origin/main
+            sed -i '' \
+              -e "s/version \"[^\"]*\"/version \"${VERSION}\"/" \
+              -e "s/sha256 \"[^\"]*\"/sha256 \"${SHA256}\"/" \
+              Casks/seen.rb
+            git add Casks/seen.rb
+            if git diff --cached --quiet; then
+              echo "Cask already up to date on main; nothing to commit."
+              exit 0
+            fi
+            # No [skip ci]: ci.yml's paths-ignore already excludes Casks/**, so
+            # this sha-only commit costs no run. Dropping the blunt override
+            # means a bot commit that ever touched code would still be gated.
+            git commit -m "Update Homebrew cask to v${VERSION}"
+            if git push origin main; then
+              exit 0
+            fi
+            echo "Push rejected on attempt ${attempt}; refreshing main and retrying."
+          done
+          echo "ERROR: could not push the cask update after 3 attempts."
+          exit 1
 
       - name: Push cask to Homebrew tap
         env:
