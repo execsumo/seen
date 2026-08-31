@@ -13,7 +13,7 @@ NO_INSTALL=0
 
 # Default tracks the newest tag so a local build never stamps a stale version.
 # The release workflow always passes --version explicitly.
-APP_VERSION="$(git -C "$REPO_ROOT" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+APP_VERSION="$(git -C "$REPO_ROOT" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
 APP_VERSION="${APP_VERSION:-0.0.0-dev}"
 
 while [[ $# -gt 0 ]]; do
