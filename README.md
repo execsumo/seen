@@ -1,10 +1,15 @@
 # Seen
 
-**Let your CLI agent see your screen.**
+**Give your coding agent eyes.**
 
-Seen is a macOS menu bar app that gives coding agents — Claude Code, Codex,
-Cursor, Antigravity, anything that speaks MCP — screenshots and on-screen text
-on demand. Ask "what's on my screen?" and the agent just looks.
+CLI agents can read your files and run your tools. They still get stuck the moment
+the useful context is visible on-screen instead of in the terminal.
+
+Seen fixes that gap. It's a macOS menu bar app that gives Claude Code, Codex,
+Cursor, Antigravity, and other MCP-capable agents screenshots and on-screen text
+on demand. Ask *"what's on my screen?"* and the agent can look for itself.
+
+Captures and OCR stay local. Nothing listens on the network.
 
 Requires macOS 15+.
 
